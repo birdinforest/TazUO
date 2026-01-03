@@ -2,10 +2,14 @@
 
 using ClassicUO.IO;
 using ClassicUO.Utility;
+using ClassicUO.Utility.Logging;
 using System;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
+using System.Reflection;
+using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 
 namespace ClassicUO.Assets
 {
@@ -13,8 +17,19 @@ namespace ClassicUO.Assets
     {
         public const int MAX_GUMP_DATA_INDEX_COUNT = 0x10000;
 
+        // Debug flag: controlled by DEBUG_GUMP_LOADING environment variable
+        private static readonly bool _debugGumpLoading =
+            System.Environment.GetEnvironmentVariable("DEBUG_GUMP_LOADING")?.ToLower() == "true";
 
         private UOFile _file;
+        // Cache structure: stores both pixels and dimensions for embedded icons
+        private struct CachedIcon
+        {
+            public uint[] Pixels;
+            public int Width;
+            public int Height;
+        }
+        private static System.Collections.Generic.Dictionary<ushort, CachedIcon> _customIconCache = new System.Collections.Generic.Dictionary<ushort, CachedIcon>();
 
         public GumpsLoader(UOFileManager fileManager) : base(fileManager) { }
 
@@ -112,6 +127,17 @@ namespace ClassicUO.Assets
 
             if (entry.CompressionFlag != CompressionType.ZlibBwt && entry.Width <= 0 && entry.Height <= 0)
             {
+                // Try to load custom icon as fallback for missing gump
+                GumpInfo customGump = TryLoadCustomBuffIcon((ushort)index);
+                if (customGump.Width > 0 && customGump.Height > 0)
+                {
+                    return customGump;
+                }
+                else
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Custom icon fallback failed for gump {index}");
+                }
                 return default;
             }
 
@@ -195,6 +221,264 @@ namespace ClassicUO.Assets
                 Height = (int)h
             };
         }
+
+        /// <summary>
+        /// Tries to load a custom buff icon from gumpartassets/icons/ when a gump is missing.
+        /// Uses the graphic ID directly as the filename (e.g., icon-0x7560.png or icon-30048.png).
+        /// </summary>
+        private GumpInfo TryLoadCustomBuffIcon(ushort gumpId)
+        {
+            if (_debugGumpLoading)
+                Log.Debug($"[GumpsLoader] TryLoadCustomBuffIcon: gumpId={gumpId} (0x{gumpId:X4})");
+
+            // Check cache first (only for embedded resources)
+            // External files are not cached to allow hot-swapping during visual testing
+            if (_customIconCache.TryGetValue(gumpId, out CachedIcon cachedIcon))
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Using cached embedded icon for gumpId {gumpId}: {cachedIcon.Width}x{cachedIcon.Height}");
+                // Return cached icon immediately - no need to reload
+                return new GumpInfo()
+                {
+                    Pixels = new System.Span<uint>(cachedIcon.Pixels),
+                    Width = cachedIcon.Width,
+                    Height = cachedIcon.Height
+                };
+            }
+
+            // Try to load custom icon using graphic ID directly as filename
+            // Support both hexadecimal (0x7560) and decimal (30048) formats, and both .bmp and .png
+            string[] filenameFormats = {
+                $"icon-0x{gumpId:X4}.png",  // icon-0x7560.png
+                $"icon-{gumpId}.png",       // icon-30048.png
+                $"icon-0x{gumpId:X4}.bmp",  // icon-0x7560.bmp
+                $"icon-{gumpId}.bmp"        // icon-30048.bmp
+            };
+
+            string exePath = System.AppContext.BaseDirectory;
+            if (_debugGumpLoading)
+                Log.Debug($"[GumpsLoader] Executable path: {exePath}");
+
+            string iconPath = null;
+            string iconFileName = null;
+            Stream embeddedStream = null;
+
+            // First, try embedded resources (from assembly manifest)
+            Assembly assembly = typeof(GumpsLoader).Assembly;
+            string assemblyName = assembly.GetName().Name;
+
+            // Debug: List all embedded resources containing "icon" or "gumpartassets" to help diagnose
+            bool debugLogged = false;
+            foreach (string filename in filenameFormats)
+            {
+                iconFileName = filename;
+                try
+                {
+                    // Try both forward slash and backslash path separators (Windows vs Unix)
+                    string[] resourcePaths = {
+                        $"{assemblyName}.gumpartassets.icons.{iconFileName}",
+                        $"{assemblyName}.gumpartassets\\icons.{iconFileName}",
+                        $"{assemblyName}.gumpartassets/icons.{iconFileName}"
+                    };
+
+                    foreach (string resourcePath in resourcePaths)
+                    {
+                        if (!debugLogged)
+                        {
+                            // Log all embedded resources containing "icon" or "gumpartassets" once
+                            string[] allResources = assembly.GetManifestResourceNames();
+                            var relevantResources = System.Array.FindAll(allResources, r =>
+                                r.Contains("icon", StringComparison.OrdinalIgnoreCase) ||
+                                r.Contains("gumpartassets", StringComparison.OrdinalIgnoreCase));
+                            if (relevantResources.Length > 0 && _debugGumpLoading)
+                            {
+                                Log.Debug($"[GumpsLoader] Available embedded resources (icon/gumpartassets): {string.Join(", ", relevantResources)}");
+                            }
+                            debugLogged = true;
+                        }
+
+                        if (_debugGumpLoading)
+                            Log.Debug($"[GumpsLoader] Checking embedded resource: {resourcePath}");
+                        embeddedStream = assembly.GetManifestResourceStream(resourcePath);
+                        if (embeddedStream != null)
+                        {
+                            if (_debugGumpLoading)
+                                Log.Debug($"[GumpsLoader] Found embedded resource: {resourcePath}");
+                            break;
+                        }
+                    }
+
+                    if (embeddedStream != null)
+                        break;
+                }
+                catch (Exception ex)
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Error checking embedded resource {iconFileName}: {ex.Message}");
+                }
+            }
+
+            // If embedded resource found, use it; otherwise check external files
+            if (embeddedStream == null)
+            {
+                foreach (string filename in filenameFormats)
+                {
+                    iconFileName = filename;
+                    string embeddedPath = System.IO.Path.Combine(exePath, "gumpartassets", "icons", iconFileName);
+                    string externalPath = System.IO.Path.Combine(exePath, "ExternalImages", "icons", iconFileName);
+
+                    if (_debugGumpLoading)
+                    {
+                        Log.Debug($"[GumpsLoader] Checking external file: {embeddedPath} (exists: {System.IO.File.Exists(embeddedPath)})");
+                        Log.Debug($"[GumpsLoader] Checking external file: {externalPath} (exists: {System.IO.File.Exists(externalPath)})");
+                    }
+
+                    if (System.IO.File.Exists(embeddedPath))
+                    {
+                        iconPath = embeddedPath;
+                        if (_debugGumpLoading)
+                            Log.Debug($"[GumpsLoader] Found icon at external path: {iconPath}");
+                        break;
+                    }
+                    else if (System.IO.File.Exists(externalPath))
+                    {
+                        iconPath = externalPath;
+                        if (_debugGumpLoading)
+                            Log.Debug($"[GumpsLoader] Found icon at external path: {iconPath}");
+                        break;
+                    }
+                }
+
+                if (iconPath == null)
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Icon file not found. Tried: {string.Join(", ", filenameFormats)}");
+                    return default;
+                }
+            }
+
+            var pngLoader = PNGLoader.Instance;
+            if (pngLoader == null)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] PNGLoader.Instance is null");
+                if (embeddedStream != null) embeddedStream.Dispose();
+                return default;
+            }
+
+            if (pngLoader.GraphicsDevice == null)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] PNGLoader.GraphicsDevice is null");
+                if (embeddedStream != null) embeddedStream.Dispose();
+                return default;
+            }
+
+            Texture2D texture = null;
+
+            // Load from embedded stream or external file
+            if (embeddedStream != null)
+            {
+                try
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Loading texture from embedded stream: {iconFileName}");
+                    texture = Texture2D.FromStream(pngLoader.GraphicsDevice, embeddedStream);
+                    if (texture != null)
+                    {
+                        // Fix alpha channel
+                        var buffer = new Color[texture.Width * texture.Height];
+                        texture.GetData(buffer);
+                        for (int i = 0; i < buffer.Length; i++)
+                            buffer[i] = Color.FromNonPremultiplied(buffer[i].R, buffer[i].G, buffer[i].B, buffer[i].A);
+                        texture.SetData(buffer);
+                        if (_debugGumpLoading)
+                            Log.Debug($"[GumpsLoader] Successfully loaded texture from embedded stream: {texture.Width}x{texture.Height}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"[GumpsLoader] Failed to load texture from embedded stream: {ex.Message}");
+                }
+                finally
+                {
+                    embeddedStream.Dispose();
+                }
+            }
+            else if (iconPath != null)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Loading texture from external file: {iconPath}");
+                texture = pngLoader.GetImageTexture(iconPath);
+                if (texture != null && _debugGumpLoading)
+                {
+                    Log.Debug($"[GumpsLoader] Successfully loaded texture from external file: {texture.Width}x{texture.Height}");
+                }
+            }
+
+            if (texture == null)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Failed to load texture");
+                return default;
+            }
+
+            if (texture.IsDisposed)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Texture is disposed");
+                return default;
+            }
+
+            if (_debugGumpLoading)
+                Log.Debug($"[GumpsLoader] Texture loaded successfully: {texture.Width}x{texture.Height}");
+
+            // Convert Texture2D to GumpInfo pixel data
+            int width = texture.Width;
+            int height = texture.Height;
+            Color[] colors = new Color[width * height];
+            texture.GetData(colors);
+
+            // Create pixel array
+            uint[] pixels = new uint[width * height];
+            for (int i = 0; i < colors.Length; i++)
+            {
+                pixels[i] = colors[i].PackedValue;
+            }
+
+            // Only cache embedded resources, not external files
+            // This allows hot-swapping external images for visual testing
+            bool isExternalFile = (embeddedStream == null && iconPath != null);
+            if (!isExternalFile)
+            {
+                // Cache embedded resources with dimensions so they can be reused
+                _customIconCache[gumpId] = new CachedIcon
+                {
+                    Pixels = pixels,
+                    Width = width,
+                    Height = height
+                };
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Cached embedded icon for gumpId {gumpId}: {width}x{height}");
+            }
+            else
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] Not caching external file icon for gumpId {gumpId} (allows hot-swapping for testing)");
+            }
+
+            if (_debugGumpLoading)
+                Log.Debug($"[GumpsLoader] Successfully created GumpInfo: {width}x{height}, {pixels.Length} pixels");
+
+            return new GumpInfo()
+            {
+                Pixels = new System.Span<uint>(pixels),
+                Width = width,
+                Height = height
+            };
+        }
+
+
     }
 
     public ref struct GumpInfo

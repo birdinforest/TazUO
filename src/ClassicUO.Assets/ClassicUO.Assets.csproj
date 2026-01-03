@@ -4,13 +4,12 @@
     <OutputType>Library</OutputType>
   </PropertyGroup>
 
-  <ItemGroup>
-    <None Remove="gumpartassets\*.png" />
-    <None Remove="fonts\*.ttf" />
-  </ItemGroup>
+  <PropertyGroup>
+    <EnableDefaultEmbeddedResourceItems>false</EnableDefaultEmbeddedResourceItems>
+  </PropertyGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="gumpartassets\*.png" />
+    <EmbeddedResource Include="gumpartassets\**\*.png" />
     <EmbeddedResource Include="fonts\*.ttf" />
   </ItemGroup>
 

@@ -1,6 +1,7 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using ClassicUO.Utility;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
@@ -220,6 +221,7 @@ namespace ClassicUO.Game.Data
 
                 var buffParser = new TextFileParser(File.ReadAllText(buff), new[] { ' ', '\t', ',' }, new[] { '#', ';' }, new[] { '"', '"' });
 
+                int index = 0;
                 while (!buffParser.IsEOF())
                 {
                     List<string> buffToken = buffParser.ReadTokens();
@@ -229,6 +231,7 @@ namespace ClassicUO.Game.Data
                         if (ushort.TryParse(buffToken[0], out ushort graphic))
                         {
                             tempList.Add(graphic);
+                            index++;
                         }
                     }
                 }

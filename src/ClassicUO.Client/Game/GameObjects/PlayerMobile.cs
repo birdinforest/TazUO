@@ -319,12 +319,25 @@ namespace ClassicUO.Game.GameObjects
                 EventSink.InvokeOnBuffRemoved(null, new BuffEventArgs(ev));
                 _buffIcons.Remove(graphic);
             }
+            else
+            {
+                Console.WriteLine($"[CLIENT_REMOVE] Buff {graphic} not found in _buffIcons. Current buffs: {string.Join(", ", _buffIcons.Keys)}");
+            }
+
+            // Update both buff gumps
+            BuffGump buffGump = UIManager.GetGump<BuffGump>();
+            if (buffGump != null)
+            {
+                buffGump.RequestUpdateContents();
+            }
 
             if (ProfileManager.CurrentProfile.UseImprovedBuffBar)
             {
-                ImprovedBuffGump gump = UIManager.GetGump<ImprovedBuffGump>();
-                if (gump != null)
-                    gump.RemoveBuff(graphic);
+                ImprovedBuffGump improvedGump = UIManager.GetGump<ImprovedBuffGump>();
+                if (improvedGump != null)
+                {
+                    improvedGump.RemoveBuff(graphic);
+                }
             }
         }
 
@@ -643,8 +656,8 @@ namespace ClassicUO.Game.GameObjects
 
         public bool Walk(Direction direction, bool run)
         {
-            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules 
-                || Pathfinder.AutoWalking 
+            if (!ProfileManager.CurrentProfile.AutoAvoidObstacules
+                || Pathfinder.AutoWalking
                 || (World.Instance.Player.Pathfinder.UseLongDistancePathfinding && !WalkableManager.Instance.IsMapGenerationComplete(World.Instance?.MapIndex ?? 0)))
             {
                 return WalkNotAvoid(direction, run);

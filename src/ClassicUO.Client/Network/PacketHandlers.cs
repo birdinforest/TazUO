@@ -5741,7 +5741,18 @@ sealed class PacketHandlers
             if (count == 0)
             {
                 world.Player.RemoveBuff(ic);
-                gump?.RequestUpdateContents();
+
+                // Update both buff gumps
+                if (gump != null)
+                {
+                    gump.RequestUpdateContents();
+                }
+
+                ImprovedBuffGump improvedGump = UIManager.GetGump<ImprovedBuffGump>();
+                if (improvedGump != null)
+                {
+                    improvedGump.RequestUpdateContents();
+                }
             }
             else
             {
@@ -5808,7 +5819,10 @@ sealed class PacketHandlers
 
                     string text = $"<left>{title}{description}{wtf}</left>";
                     bool alreadyExists = world.Player.IsBuffIconExists(ic);
-                    world.Player.AddBuff(ic, BuffTable.Table[iconID], timer, text, title);
+
+                    ushort graphic = BuffTable.Table[iconID];
+
+                    world.Player.AddBuff(ic, graphic, timer, text, title);
 
                     if (!alreadyExists)
                     {
