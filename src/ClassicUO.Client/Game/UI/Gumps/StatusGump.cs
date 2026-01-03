@@ -230,7 +230,7 @@ namespace ClassicUO.Game.UI.Gumps
             {
                 Add
                 (
-                    new Button((int)ButtonType.BuffIcon, 0x7538, 0x7539, 0x7539)
+                    new Button((int)ButtonType.BuffIcon, 0x25F9, 0x25FB, 0x25FB)
                     {
                         X = 20,
                         Y = 42,
