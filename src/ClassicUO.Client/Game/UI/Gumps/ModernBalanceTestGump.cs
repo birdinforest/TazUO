@@ -18,9 +18,17 @@ public class ModernBalanceTestGump : NineSliceGump
     private ModernScrollArea _scrollArea;
     private int _contentY = 0;
     private const int PADDING = 15;
-    private const int SECTION_SPACING = 20;
-    private const int BUTTON_HEIGHT = 30;
+    private const int SECTION_SPACING = 25;
+    private const int BUTTON_HEIGHT = 35;
     private const int BUTTON_WIDTH = 120;
+
+    // Traditional UO font sizes
+    private const float TITLE_FONT_SIZE = 24f;
+    private const float HEADER_FONT_SIZE = 20f;
+    private const float LABEL_FONT_SIZE = 16f;
+    private const float TEXT_FONT_SIZE = 15f;
+    private const float SMALL_FONT_SIZE = 13f;
+    private const float TINY_FONT_SIZE = 11f;
 
     public ModernBalanceTestGump(World world, int x, int y, BalanceTestData data)
         : base(world, x, y, 700, 600,
@@ -35,11 +43,11 @@ public class ModernBalanceTestGump : NineSliceGump
 
     private void BuildUI(BalanceTestData data)
     {
-        // Title bar (fixed, not scrollable)
+        // Title bar (fixed, not scrollable) - Traditional UO gold/yellow
         var titleText = TextBox.GetOne(
             "/c[#FFD700]Combat Analysis System/c[#FFFFFF]",
             TrueTypeLoader.EMBEDDED_FONT,
-            20f,
+            TITLE_FONT_SIZE,
             Color.White,
             TextBox.RTLOptions.Default(Width - 100)
         );
@@ -67,7 +75,7 @@ public class ModernBalanceTestGump : NineSliceGump
             // ============================================
             // Player Stats Only (No Target)
             // ============================================
-            AddSectionHeader("Your Combat Statistics", Color.Gold);
+            AddSectionHeader("Your Combat Statistics", new Color(255, 215, 0)); // Traditional UO gold
 
             // HP Bar
             AddLabel("Health Points:", Color.White);
@@ -77,34 +85,34 @@ public class ModernBalanceTestGump : NineSliceGump
                 "",
                 hpPercentage,
                 _scrollArea.Width - 20,
-                25
+                30 // Larger bar for better visibility
             );
             hpBar.X = 10;
             hpBar.Y = _contentY;
-            hpBar.ForegrouneColor = Color.Red;
+            hpBar.ForegrouneColor = new Color(220, 20, 60); // Crimson red
             _scrollArea.Add(hpBar);
-            _contentY += 35;
+            _contentY += 40; // More spacing after HP bar
 
-            AddText($"/c[#FFFFFF]HP: {data.PlayerHits}/{data.PlayerHitsMax} | Armor: {data.PlayerArmor}", Color.White);
+            AddText($"/c[#FFD700]HP: /c[#FFFFFF]{data.PlayerHits}/{data.PlayerHitsMax} | /c[#FFD700]Armor: /c[#FFFFFF]{data.PlayerArmor}", Color.White);
 
             // Attributes
-            AddLabel("Attributes:", Color.LightBlue);
+            AddLabel("Attributes:", new Color(173, 216, 230)); // Light blue
             _contentY += 5;
-            AddAttributeBox("STR", data.Str, Color.Red);
-            AddAttributeBox("DEX", data.Dex, Color.Green);
-            AddAttributeBox("INT", data.Int, Color.Blue);
+            AddAttributeBox("STR", data.Str, new Color(220, 20, 60)); // Crimson red
+            AddAttributeBox("DEX", data.Dex, new Color(50, 205, 50)); // Lime green
+            AddAttributeBox("INT", data.Int, new Color(30, 144, 255)); // Dodger blue
             _contentY += SECTION_SPACING;
 
             // Weapon Info
-            AddSectionHeader("Weapon Information", Color.Cyan);
-            AddText($"/c[#FFFFFF]Weapon: /c[#00FF00]{data.WeaponName}", Color.White);
-            AddText($"/c[#FFFFFF]Base Damage: /c[#FFFF00]{data.PlayerMinDamage}-{data.PlayerMaxDamage}", Color.White);
-            AddText($"/c[#FFFFFF]Tactics: {data.PlayerTacticsSkill:F1} | Weapon Skill: {data.PlayerWeaponSkill:F1}", Color.White);
+            AddSectionHeader("Weapon Information", new Color(0, 191, 255)); // Deep sky blue
+            AddText($"/c[#FFD700]Weapon: /c[#FFFFFF]{data.WeaponName}", Color.White);
+            AddText($"/c[#FFD700]Base Damage: /c[#FFFFFF]{data.PlayerMinDamage}-{data.PlayerMaxDamage}", Color.White);
+            AddText($"/c[#FFD700]Tactics: /c[#FFFFFF]{data.PlayerTacticsSkill:F1} | Weapon Skill: {data.PlayerWeaponSkill:F1}", Color.White);
             AddText($"/c[#00FF00]Modified Damage: {data.PlayerEffectiveDamageMin:F1}-{data.PlayerEffectiveDamageMax:F1}", Color.White);
             _contentY += SECTION_SPACING;
 
             // Combat Skills
-            AddSectionHeader("Combat Skills", Color.LightBlue);
+            AddSectionHeader("Combat Skills", new Color(173, 216, 230)); // Light blue
             AddText($"/c[#FFFFFF]Swords: {data.PlayerTacticsSkill:F1} | Bludgeoning: {data.PlayerTacticsSkill:F1}", Color.White);
             AddText($"/c[#FFFFFF]Fencing: {data.PlayerTacticsSkill:F1} | Archery: {data.PlayerTacticsSkill:F1}", Color.White);
         }
@@ -113,7 +121,7 @@ public class ModernBalanceTestGump : NineSliceGump
             // ============================================
             // SECTION 1: Player Stats
             // ============================================
-            AddSectionHeader("Your Data", Color.Gold);
+            AddSectionHeader("Your Data", new Color(255, 215, 0)); // Traditional UO gold
 
             // HP Bar
             AddLabel("Health Points:", Color.White);
@@ -123,57 +131,57 @@ public class ModernBalanceTestGump : NineSliceGump
                 "",
                 hpPercentage,
                 _scrollArea.Width - 20,
-                25
+                30 // Larger bar for better visibility
             );
             hpBar.X = 10;
             hpBar.Y = _contentY;
-            hpBar.ForegrouneColor = Color.Red;
+            hpBar.ForegrouneColor = new Color(220, 20, 60); // Crimson red
             _scrollArea.Add(hpBar);
-            _contentY += 35;
+            _contentY += 40; // More spacing after HP bar
 
-            AddText($"/c[#FFFFFF]HP: {data.PlayerHits}/{data.PlayerHitsMax} | Armor: {data.PlayerArmor}", Color.White);
-            AddText($"/c[#FFFFFF]Weapon: {data.WeaponName} | Damage: {data.PlayerMinDamage}-{data.PlayerMaxDamage}", Color.White);
-            AddText($"/c[#FFFFFF]Tactics: {data.PlayerTacticsSkill:F1} | Weapon Skill: {data.PlayerWeaponSkill:F1}", Color.White);
+            AddText($"/c[#FFD700]HP: /c[#FFFFFF]{data.PlayerHits}/{data.PlayerHitsMax} | /c[#FFD700]Armor: /c[#FFFFFF]{data.PlayerArmor}", Color.White);
+            AddText($"/c[#FFD700]Weapon: /c[#FFFFFF]{data.WeaponName} | /c[#FFD700]Damage: /c[#FFFFFF]{data.PlayerMinDamage}-{data.PlayerMaxDamage}", Color.White);
+            AddText($"/c[#FFD700]Tactics: /c[#FFFFFF]{data.PlayerTacticsSkill:F1} | /c[#FFD700]Weapon Skill: /c[#FFFFFF]{data.PlayerWeaponSkill:F1}", Color.White);
 
-            // Damage formula
+            // Damage formula - Traditional UO dark background
             var formulaBox = new ColorBox(
                 _scrollArea.Width - 20,
-                40,
+                45, // Taller for larger font
                 1 // Dark gray hue
             );
             formulaBox.X = 10;
             formulaBox.Y = _contentY;
-            formulaBox.Alpha = 0.5f;
+            formulaBox.Alpha = 0.6f; // Slightly more visible
             _scrollArea.Add(formulaBox);
 
             var formulaText = TextBox.GetOne(
                 $"/c[#CCCCCC]Base[{data.PlayerBaseDamage:F1}] × (1+Skill[{data.PlayerSkillModifier:F3}]+Attr[{data.PlayerAttributeModifier:F3}]) ÷ 2 - Armor[{data.PlayerArmorReduction:F1}]",
                 TrueTypeLoader.EMBEDDED_FONT,
-                12f,
+                SMALL_FONT_SIZE,
                 Color.LightGray,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 40)
             );
             formulaText.X = 15;
-            formulaText.Y = _contentY + 5;
+            formulaText.Y = _contentY + 8; // Better vertical centering
             _scrollArea.Add(formulaText);
-            _contentY += 50;
+            _contentY += 55; // More spacing for formula box
 
-            // Effective damage and hit chance
-            AddText($"/c[#00FF00]Effective Physical Damage (Calculated): {data.PlayerEffectiveDamageMin:F1}-{data.PlayerEffectiveDamageMax:F1}", Color.White);
-            AddText($"/c[#FFFF00]Hit Chance: {data.PlayerHitChance:F1}%", Color.White);
+            // Effective damage and hit chance - Traditional UO colors
+            AddText($"/c[#00FF00]Effective Physical Damage (Calculated): /c[#FFFFFF]{data.PlayerEffectiveDamageMin:F1}-{data.PlayerEffectiveDamageMax:F1}", Color.White);
+            AddText($"/c[#FFD700]Hit Chance: /c[#FFFFFF]{data.PlayerHitChance:F1}%", Color.White);
 
             // Hit chance details
             var hitChanceDetail = TextBox.GetOne(
                 $"/c[#CCCCCC](Attack Skill: {data.PlayerAttackSkill:F1}, Defend Skill: {data.PlayerDefendSkill:F1}, Hit Bonus: {data.PlayerHitBonus}%)",
                 TrueTypeLoader.EMBEDDED_FONT,
-                11f,
+                TINY_FONT_SIZE,
                 Color.LightGray,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 20)
             );
             hitChanceDetail.X = 10;
             hitChanceDetail.Y = _contentY;
             _scrollArea.Add(hitChanceDetail);
-            _contentY += 18;
+            _contentY += 22; // More spacing for detail text
 
             // Real damage range (if available)
             if (data.RealPlayerDamageRange != null)
@@ -192,7 +200,7 @@ public class ModernBalanceTestGump : NineSliceGump
             // ============================================
             // SECTION 2: Monster Stats
             // ============================================
-            AddSectionHeader($"{data.MonsterName} Data", Color.OrangeRed);
+            AddSectionHeader($"{data.MonsterName} Data", new Color(255, 99, 71)); // Traditional UO orange-red
 
             // Monster HP Bar
             AddLabel("Monster Health:", Color.White);
@@ -201,55 +209,55 @@ public class ModernBalanceTestGump : NineSliceGump
                 "",
                 1.0, // 100% for full HP
                 _scrollArea.Width - 20,
-                25
+                30 // Larger bar for better visibility
             );
             monsterHpBar.X = 10;
             monsterHpBar.Y = _contentY;
-            monsterHpBar.ForegrouneColor = Color.OrangeRed;
+            monsterHpBar.ForegrouneColor = new Color(255, 99, 71); // Tomato red
             _scrollArea.Add(monsterHpBar);
-            _contentY += 35;
+            _contentY += 40; // More spacing after HP bar
 
-            AddText($"/c[#FFFFFF]HP: {data.MonsterHits} | Armor: {data.MonsterArmor}", Color.White);
-            AddText($"/c[#FFFFFF]Physical Damage: {data.MonsterMinDamage}-{data.MonsterMaxDamage} | Tactics: {data.MonsterTacticsSkill:F1}", Color.White);
+            AddText($"/c[#FF6347]HP: /c[#FFFFFF]{data.MonsterHits} | /c[#FF6347]Armor: /c[#FFFFFF]{data.MonsterArmor}", Color.White);
+            AddText($"/c[#FF6347]Physical Damage: /c[#FFFFFF]{data.MonsterMinDamage}-{data.MonsterMaxDamage} | /c[#FF6347]Tactics: /c[#FFFFFF]{data.MonsterTacticsSkill:F1}", Color.White);
 
-            // Monster damage formula
+            // Monster damage formula - Traditional UO dark background
             var monsterFormulaBox = new ColorBox(
                 _scrollArea.Width - 20,
-                40,
+                45, // Taller for larger font
                 1 // Dark gray hue
             );
             monsterFormulaBox.X = 10;
             monsterFormulaBox.Y = _contentY;
-            monsterFormulaBox.Alpha = 0.5f;
+            monsterFormulaBox.Alpha = 0.6f; // Slightly more visible
             _scrollArea.Add(monsterFormulaBox);
 
             var monsterFormulaText = TextBox.GetOne(
                 $"/c[#CCCCCC]Base[{data.MonsterBaseDamage:F1}] × (1+Skill[{data.MonsterSkillModifier:F3}]+Attr[{data.MonsterAttributeModifier:F3}]) ÷ 2 - Armor[{data.MonsterArmorReduction:F1}]",
                 TrueTypeLoader.EMBEDDED_FONT,
-                12f,
+                SMALL_FONT_SIZE,
                 Color.LightGray,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 40)
             );
             monsterFormulaText.X = 15;
-            monsterFormulaText.Y = _contentY + 5;
+            monsterFormulaText.Y = _contentY + 8; // Better vertical centering
             _scrollArea.Add(monsterFormulaText);
-            _contentY += 50;
+            _contentY += 55; // More spacing for formula box
 
-            AddText($"/c[#FF6347]Effective Physical Damage (Calculated): {data.MonsterEffectiveDamageMin:F1}-{data.MonsterEffectiveDamageMax:F1}", Color.White);
-            AddText($"/c[#FF6347]Hit Chance: {data.MonsterHitChance:F1}%", Color.White);
+            AddText($"/c[#FF6347]Effective Physical Damage (Calculated): /c[#FFFFFF]{data.MonsterEffectiveDamageMin:F1}-{data.MonsterEffectiveDamageMax:F1}", Color.White);
+            AddText($"/c[#FF6347]Hit Chance: /c[#FFFFFF]{data.MonsterHitChance:F1}%", Color.White);
 
             // Monster hit chance details
             var monsterHitChanceDetail = TextBox.GetOne(
                 $"/c[#CCCCCC](Attack Skill: {data.MonsterAttackSkill:F1}, Defend Skill: {data.MonsterDefendSkill:F1}, Hit Bonus: {data.MonsterHitBonus}%)",
                 TrueTypeLoader.EMBEDDED_FONT,
-                11f,
+                TINY_FONT_SIZE,
                 Color.LightGray,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 20)
             );
             monsterHitChanceDetail.X = 10;
             monsterHitChanceDetail.Y = _contentY;
             _scrollArea.Add(monsterHitChanceDetail);
-            _contentY += 18;
+            _contentY += 22; // More spacing for detail text
 
             // Real monster damage range (if available)
             if (data.RealMonsterDamageRange != null)
@@ -270,7 +278,7 @@ public class ModernBalanceTestGump : NineSliceGump
             // ============================================
             if (data.HasBreathAttack || data.HasPoisonAttack || data.HasLifeDrain)
             {
-                AddSectionHeader("Special Attacks", Color.Orange);
+                AddSectionHeader("Special Attacks", new Color(255, 165, 0)); // Traditional UO orange
 
                 if (data.HasBreathAttack)
                 {
@@ -312,21 +320,21 @@ public class ModernBalanceTestGump : NineSliceGump
             // ============================================
             // SECTION 4: Combat Prediction
             // ============================================
-            AddSectionHeader("Combat Prediction", Color.LightBlue);
+            AddSectionHeader("Combat Prediction", new Color(135, 206, 250)); // Traditional UO light sky blue
 
-            AddText($"/c[#FFFFFF]Hits to Kill {data.MonsterName}: /c[#00FF00]{data.HitsToKill} attacks", Color.White);
-            AddText($"/c[#FFFFFF]Hits to be Killed (Physical Only): /c[#FF6347]{data.HitsToBeKilled} attacks", Color.White);
+            AddText($"/c[#FFD700]Hits to Kill {data.MonsterName}: /c[#00FF00]{data.HitsToKill} /c[#FFFFFF]attacks", Color.White);
+            AddText($"/c[#FFD700]Hits to be Killed (Physical Only): /c[#FF6347]{data.HitsToBeKilled} /c[#FFFFFF]attacks", Color.White);
 
             if (data.HasPoisonAttack || data.HasMonsterMagic || data.HasLifeDrain)
             {
-                AddText($"/c[#FFFFFF]Hits to be Killed (With Special Attacks): /c[#FF0000]{data.HitsToBeKilledWithDoT} attacks", Color.White);
+                AddText($"/c[#FFD700]Hits to be Killed (With Special Attacks): /c[#FF0000]{data.HitsToBeKilledWithDoT} /c[#FFFFFF]attacks", Color.White);
 
                 string damageComponents = "Physical";
                 if (data.HasMonsterMagic) damageComponents += "+Magic";
                 if (data.HasPoisonAttack) damageComponents += "+Poison";
                 if (data.HasLifeDrain) damageComponents += "+HP Drain";
 
-                AddText($"/c[#FFA500]Total Damage Per Hit: {data.TotalMonsterDamagePerHit:F1} ({damageComponents})", Color.White);
+                AddText($"/c[#FFA500]Total Damage Per Hit: /c[#FFFFFF]{data.TotalMonsterDamagePerHit:F1} /c[#CCCCCC]({damageComponents})", Color.White);
 
                 if (data.HasLifeDrain)
                 {
@@ -358,31 +366,31 @@ public class ModernBalanceTestGump : NineSliceGump
 
             var assessmentBox = new ColorBox(
                 _scrollArea.Width - 20,
-                60,
+                70, // Taller for larger font
                 assessmentHue
             );
             assessmentBox.X = 10;
             assessmentBox.Y = _contentY;
-            assessmentBox.Alpha = 0.3f;
+            assessmentBox.Alpha = 0.4f; // Slightly more visible
             _scrollArea.Add(assessmentBox);
 
             var assessmentText = TextBox.GetOne(
                 $"/c[#FFFFFF]{data.Assessment}/n/c[#CCCCCC]{data.AssessmentDetail}",
                 TrueTypeLoader.EMBEDDED_FONT,
-                16f,
+                TEXT_FONT_SIZE,
                 Color.White,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 40)
             );
             assessmentText.X = 15;
-            assessmentText.Y = _contentY + 10;
+            assessmentText.Y = _contentY + 12; // Better vertical centering
             _scrollArea.Add(assessmentText);
-            _contentY += 70;
+            _contentY += 80; // More spacing for assessment box
 
             // Note about hit chance accuracy
             var noteText = TextBox.GetOne(
                 "/c[#888888]Note: Hit chance is calculated based on skill values. Actual combat may vary due to temporary buffs/debuffs, status effects, etc.",
                 TrueTypeLoader.EMBEDDED_FONT,
-                10f,
+                TINY_FONT_SIZE,
                 Color.Gray,
                 TextBox.RTLOptions.Default(_scrollArea.Width - 20)
             );
@@ -392,6 +400,45 @@ public class ModernBalanceTestGump : NineSliceGump
         }
 
         // Bottom buttons (fixed at bottom of gump, not scrollable)
+        int buttonY = Height - BUTTON_HEIGHT - PADDING;
+
+        // Target button (only show if no target is selected)
+        if (!data.HasTarget)
+        {
+            var targetButton = new NineSliceButton(
+                BUTTON_WIDTH,
+                BUTTON_HEIGHT,
+                ModernUIConstants.ModernUIButtonUp,
+                ModernUIConstants.ModernUIButton_BorderSize,
+                ModernUIConstants.ModernUIButtonDown,
+                ModernUIConstants.ModernUIButton_BorderSize,
+                hoverHue: 37
+            );
+            targetButton.X = Width - (BUTTON_WIDTH * 2) - (PADDING * 2);
+            targetButton.Y = buttonY;
+            targetButton.MouseUp += (sender, e) =>
+            {
+                if (e.Button == MouseButtonType.Left)
+                {
+                    // Execute target command
+                    ClassicUO.Game.GameActions.Say("BalanceTestUITarget", 0xFFFF, MessageType.Command);
+                }
+            };
+
+            var targetButtonText = TextBox.GetOne(
+                "Target",
+                TrueTypeLoader.EMBEDDED_FONT,
+                LABEL_FONT_SIZE,
+                Color.White,
+                TextBox.RTLOptions.Default(BUTTON_WIDTH - 10)
+            );
+            targetButtonText.X = 5;
+            targetButtonText.Y = 5;
+            targetButton.Add(targetButtonText);
+            Add(targetButton);
+        }
+
+        // Close button
         var closeButton = new NineSliceButton(
             BUTTON_WIDTH,
             BUTTON_HEIGHT,
@@ -402,7 +449,7 @@ public class ModernBalanceTestGump : NineSliceGump
             hoverHue: 37
         );
         closeButton.X = Width - BUTTON_WIDTH - PADDING;
-        closeButton.Y = Height - BUTTON_HEIGHT - PADDING;
+        closeButton.Y = buttonY;
         closeButton.MouseUp += (sender, e) =>
         {
             if (e.Button == MouseButtonType.Left)
@@ -414,7 +461,7 @@ public class ModernBalanceTestGump : NineSliceGump
         var closeButtonText = TextBox.GetOne(
             "Close",
             TrueTypeLoader.EMBEDDED_FONT,
-            14f,
+            LABEL_FONT_SIZE,
             Color.White,
             TextBox.RTLOptions.Default(BUTTON_WIDTH - 10)
         );
@@ -430,14 +477,14 @@ public class ModernBalanceTestGump : NineSliceGump
         var header = TextBox.GetOne(
             $"/c[{ColorToHex(color)}]{text}",
             TrueTypeLoader.EMBEDDED_FONT,
-            18f,
+            HEADER_FONT_SIZE,
             color,
             TextBox.RTLOptions.Default(_scrollArea.Width - 20)
         );
         header.X = 10;
         header.Y = _contentY;
         _scrollArea.Add(header);
-        _contentY += 30;
+        _contentY += 35; // More spacing for headers
     }
 
     private void AddLabel(string text, Color color)
@@ -445,14 +492,14 @@ public class ModernBalanceTestGump : NineSliceGump
         var label = TextBox.GetOne(
             text,
             TrueTypeLoader.EMBEDDED_FONT,
-            14f,
+            LABEL_FONT_SIZE,
             color,
             TextBox.RTLOptions.Default(_scrollArea.Width - 20)
         );
         label.X = 10;
         label.Y = _contentY;
         _scrollArea.Add(label);
-        _contentY += 20;
+        _contentY += 25; // More spacing for labels
     }
 
     private void AddText(string text, Color defaultColor)
@@ -460,14 +507,14 @@ public class ModernBalanceTestGump : NineSliceGump
         var textBox = TextBox.GetOne(
             text,
             TrueTypeLoader.EMBEDDED_FONT,
-            13f,
+            TEXT_FONT_SIZE,
             defaultColor,
             TextBox.RTLOptions.Default(_scrollArea.Width - 20)
         );
         textBox.X = 10;
         textBox.Y = _contentY;
         _scrollArea.Add(textBox);
-        _contentY += 18;
+        _contentY += 22; // More spacing for text lines
     }
 
     private void AddAttributeBox(string name, int value, Color color)
@@ -477,23 +524,23 @@ public class ModernBalanceTestGump : NineSliceGump
         else if (color == Color.Green) hue = 63;
         else if (color == Color.Blue) hue = 88;
 
-        var box = new ColorBox(80, 25, hue);
-        box.X = 10 + ((name == "STR" ? 0 : name == "DEX" ? 90 : 180));
+        var box = new ColorBox(90, 30, hue); // Larger boxes for larger fonts
+        box.X = 10 + ((name == "STR" ? 0 : name == "DEX" ? 100 : 200));
         box.Y = _contentY;
-        box.Alpha = 0.3f;
+        box.Alpha = 0.4f; // Slightly more visible
         _scrollArea.Add(box);
 
         var text = TextBox.GetOne(
             $"{name}: {value}",
             TrueTypeLoader.EMBEDDED_FONT,
-            12f,
+            SMALL_FONT_SIZE,
             color,
-            TextBox.RTLOptions.Default(75)
+            TextBox.RTLOptions.Default(85)
         );
-        text.X = box.X + 5;
-        text.Y = _contentY + 5;
+        text.X = box.X + 8;
+        text.Y = _contentY + 6; // Better vertical centering
         _scrollArea.Add(text);
-        _contentY += 30;
+        _contentY += 35; // More spacing for attribute boxes
     }
 
     private Color GetAssessmentColor(int level)
