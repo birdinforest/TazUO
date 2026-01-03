@@ -11,16 +11,21 @@ using System.Text.Json;
 namespace ClassicUO.Game.UI.Gumps;
 
 /// <summary>
-/// Modern BalanceTest UI - Displays combat analysis data using modern UI components
+/// Traditional UO BalanceTest UI - Displays combat analysis data using traditional Ultima Online gump graphics
 /// </summary>
-public class ModernBalanceTestGump : NineSliceGump
+public class ModernBalanceTestGump : Gump
 {
-    private ModernScrollArea _scrollArea;
+    private ScrollArea _scrollArea;
     private int _contentY = 0;
     private const int PADDING = 15;
     private const int SECTION_SPACING = 25;
-    private const int BUTTON_HEIGHT = 35;
     private const int BUTTON_WIDTH = 120;
+
+    // Traditional UO gump graphics
+    private const ushort GUMP_BACKGROUND_TILED = 0x243A; // Traditional UO tiled background (gray stone texture)
+    private const ushort BUTTON_NORMAL = 0x00EF; // Traditional UO button normal
+    private const ushort BUTTON_PRESSED = 0x00F0; // Traditional UO button pressed
+    private const ushort BUTTON_HOVER = 0x00EE; // Traditional UO button hover
 
     // Traditional UO font sizes
     private const float TITLE_FONT_SIZE = 24f;
@@ -30,14 +35,27 @@ public class ModernBalanceTestGump : NineSliceGump
     private const float SMALL_FONT_SIZE = 13f;
     private const float TINY_FONT_SIZE = 11f;
 
+    // Gump dimensions
+    private const int GUMP_WIDTH = 700;
+    private const int GUMP_HEIGHT = 600;
+    private const int CONTENT_START_Y = 50;
+    private const int CONTENT_HEIGHT = GUMP_HEIGHT - 120;
+
     public ModernBalanceTestGump(World world, int x, int y, BalanceTestData data)
-        : base(world, x, y, 700, 600,
-              ModernUIConstants.ModernUIPanel,
-              ModernUIConstants.ModernUIPanel_BoderSize,
-              resizable: true,
-              minWidth: 500,
-              minHeight: 400)
+        : base(world, 0, 0)
     {
+        X = x;
+        Y = y;
+        CanMove = true;
+        CanCloseWithRightClick = true;
+        AcceptMouseInput = true;
+
+        // Add traditional UO tiled background (gray stone texture)
+        Add(new GumpPicTiled(0, 0, GUMP_WIDTH, GUMP_HEIGHT, GUMP_BACKGROUND_TILED) { AcceptMouseInput = false });
+
+        Width = GUMP_WIDTH;
+        Height = GUMP_HEIGHT;
+
         BuildUI(data);
     }
 
@@ -55,17 +73,14 @@ public class ModernBalanceTestGump : NineSliceGump
         titleText.Y = PADDING;
         Add(titleText);
 
-        // Scrollable content area
-        _scrollArea = new ModernScrollArea(
+        // Scrollable content area - Traditional UO ScrollArea
+        _scrollArea = new ScrollArea(
             PADDING,
-            50,
+            CONTENT_START_Y,
             Width - (PADDING * 2),
-            Height - 120,
-            scrollMaxHeight: -1
-        )
-        {
-            ScrollbarBehaviour = ScrollbarBehaviour.ShowWhenDataExceedFromView
-        };
+            CONTENT_HEIGHT,
+            true
+        );
         Add(_scrollArea);
 
         _contentY = 0;
@@ -400,74 +415,48 @@ public class ModernBalanceTestGump : NineSliceGump
         }
 
         // Bottom buttons (fixed at bottom of gump, not scrollable)
-        int buttonY = Height - BUTTON_HEIGHT - PADDING;
+        // Traditional UO buttons are typically 25-30 pixels tall
+        int buttonY = Height - 40 - PADDING;
 
-        // Target button (only show if no target is selected)
+        // Target button (only show if no target is selected) - Traditional UO Button
         if (!data.HasTarget)
         {
-            var targetButton = new NineSliceButton(
-                BUTTON_WIDTH,
-                BUTTON_HEIGHT,
-                ModernUIConstants.ModernUIButtonUp,
-                ModernUIConstants.ModernUIButton_BorderSize,
-                ModernUIConstants.ModernUIButtonDown,
-                ModernUIConstants.ModernUIButton_BorderSize,
-                hoverHue: 37
-            );
-            targetButton.X = Width - (BUTTON_WIDTH * 2) - (PADDING * 2);
-            targetButton.Y = buttonY;
-            targetButton.MouseUp += (sender, e) =>
-            {
-                if (e.Button == MouseButtonType.Left)
-                {
-                    // Execute target command
-                    ClassicUO.Game.GameActions.Say("BalanceTestUITarget", 0xFFFF, MessageType.Command);
-                }
-            };
-
-            var targetButtonText = TextBox.GetOne(
+            var targetButton = new Button(
+                1, // Button ID
+                BUTTON_NORMAL,
+                BUTTON_PRESSED,
+                BUTTON_HOVER,
                 "Target",
-                TrueTypeLoader.EMBEDDED_FONT,
-                LABEL_FONT_SIZE,
-                Color.White,
-                TextBox.RTLOptions.Default(BUTTON_WIDTH - 10)
-            );
-            targetButtonText.X = 5;
-            targetButtonText.Y = 5;
-            targetButton.Add(targetButtonText);
+                1, // Font
+                true, // Unicode
+                0x0386, // Normal hue (gold)
+                0x0021 // Hover hue (yellow)
+            )
+            {
+                X = Width - (BUTTON_WIDTH * 2) - (PADDING * 2),
+                Y = buttonY,
+                ButtonAction = ButtonAction.Activate
+            };
             Add(targetButton);
         }
 
-        // Close button
-        var closeButton = new NineSliceButton(
-            BUTTON_WIDTH,
-            BUTTON_HEIGHT,
-            ModernUIConstants.ModernUIButtonUp,
-            ModernUIConstants.ModernUIButton_BorderSize,
-            ModernUIConstants.ModernUIButtonDown,
-            ModernUIConstants.ModernUIButton_BorderSize,
-            hoverHue: 37
-        );
-        closeButton.X = Width - BUTTON_WIDTH - PADDING;
-        closeButton.Y = buttonY;
-        closeButton.MouseUp += (sender, e) =>
-        {
-            if (e.Button == MouseButtonType.Left)
-            {
-                Dispose();
-            }
-        };
-
-        var closeButtonText = TextBox.GetOne(
+        // Close button - Traditional UO Button
+        var closeButton = new Button(
+            0, // Button ID
+            BUTTON_NORMAL,
+            BUTTON_PRESSED,
+            BUTTON_HOVER,
             "Close",
-            TrueTypeLoader.EMBEDDED_FONT,
-            LABEL_FONT_SIZE,
-            Color.White,
-            TextBox.RTLOptions.Default(BUTTON_WIDTH - 10)
-        );
-        closeButtonText.X = 5;
-        closeButtonText.Y = 5;
-        closeButton.Add(closeButtonText);
+            1, // Font
+            true, // Unicode
+            0x0386, // Normal hue (gold)
+            0x0021 // Hover hue (yellow)
+        )
+        {
+            X = Width - BUTTON_WIDTH - PADDING,
+            Y = buttonY,
+            ButtonAction = ButtonAction.Activate
+        };
         Add(closeButton);
     }
 
@@ -560,14 +549,17 @@ public class ModernBalanceTestGump : NineSliceGump
         return $"#{color.R:X2}{color.G:X2}{color.B:X2}";
     }
 
-    protected override void OnResize(int oldWidth, int oldHeight, int newWidth, int newHeight)
+    public override void OnButtonClick(int buttonID)
     {
-        base.OnResize(oldWidth, oldHeight, newWidth, newHeight);
-        if (_scrollArea != null)
+        switch (buttonID)
         {
-            _scrollArea.Width = newWidth - (PADDING * 2);
-            _scrollArea.Height = newHeight - 120;
-            _scrollArea.UpdateWidth(_scrollArea.Width);
+            case 0: // Close button
+                Dispose();
+                break;
+            case 1: // Target button
+                ClassicUO.Game.GameActions.Say("BalanceTestUITarget", 0xFFFF, MessageType.Command);
+                Dispose(); // Close current gump
+                break;
         }
     }
 }
