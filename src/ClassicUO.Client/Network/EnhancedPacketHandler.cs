@@ -24,6 +24,7 @@ public class EnhancedPacketHandler
         Handler.Add(EnhancedPacketType.EnableEnhancedPacket, EnableEnhancedPacket);
         Handler.Add(EnhancedPacketType.BalanceTestModernGump, HandleBalanceTestModernGump);
         Handler.Add(EnhancedPacketType.CommandUI, HandleCommandUI);
+        Handler.Add(EnhancedPacketType.ModernDialogueGump, HandleModernDialogueGump);
     }
 
     /// <summary>
@@ -110,6 +111,80 @@ public class EnhancedPacketHandler
         catch (Exception ex)
         {
             Log.Error($"Error handling Command UI packet: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Handle Modern Dialogue Gump packet
+    /// </summary>
+    private static void HandleModernDialogueGump(ref StackDataReader p, int version)
+    {
+        try
+        {
+            // Read JSON data
+            string json = p.ReadUTF8();
+
+            Log.Info($"[ModernDialogueGump] Received JSON: {json.Length} bytes");
+            Log.Info($"[ModernDialogueGump] JSON preview (first 300 chars): {(json.Length > 300 ? json.Substring(0, 300) + "..." : json)}");
+
+            // Deserialize to ModernDialogueGumpData
+            // Configure JsonSerializerOptions to match server's PascalCase property names
+            var options = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true // Allow case-insensitive matching
+            };
+            var data = JsonSerializer.Deserialize<ModernDialogueGumpData>(json, options);
+
+            if (data != null)
+            {
+                Log.Info($"[ModernDialogueGump] Deserialized data - NpcTitle: '{data.NpcTitle}', DialogueText: '{data.DialogueText?.Substring(0, Math.Min(50, data.DialogueText?.Length ?? 0))}...', Options count: {data.Options?.Count ?? 0}");
+
+                if (data.Options != null)
+                {
+                    for (int i = 0; i < data.Options.Count; i++)
+                    {
+                        var opt = data.Options[i];
+                        Log.Info($"[ModernDialogueGump] Option {i}: Id={opt.Id}, Text='{opt.Text}', NextNodeId='{opt.NextNodeId}'");
+                    }
+                }
+
+                Log.Info($"[ModernDialogueGump] BackButtonText: '{data.BackButtonText}', HasBackButton: {data.HasBackButton}");
+
+                // Get world instance (World is a singleton)
+                World world = World.Instance;
+                if (world != null)
+                {
+                    // Check if singleton instance already exists and is not disposed
+                    var existingGump = ModernDialogueGump.Instance;
+
+                    if (existingGump != null && !existingGump.IsDisposed)
+                    {
+                        // Existing instance - update content
+                        existingGump.UpdateContent(data);
+                        Log.Info($"[ModernDialogueGump] Existing singleton instance updated with new content");
+                    }
+                    else
+                    {
+                        // Create new singleton instance
+                        var gump = ModernDialogueGump.GetOrCreateInstance(world, data);
+                        UIManager.Add(gump);
+                        Log.Info($"[ModernDialogueGump] New singleton instance created and added to UI manager");
+                    }
+                }
+                else
+                {
+                    Log.Error("[ModernDialogueGump] World instance is null");
+                }
+            }
+            else
+            {
+                Log.Error("[ModernDialogueGump] Failed to deserialize JSON data");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"[ModernDialogueGump] Error handling Modern Dialogue Gump packet: {ex.Message}");
+            Log.Error($"[ModernDialogueGump] Stack trace: {ex.StackTrace}");
         }
     }
 

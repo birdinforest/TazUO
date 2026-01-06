@@ -117,6 +117,9 @@ namespace ClassicUO.Game
 
         public const uint RECHECK_HITS_STATUS = 20000;
 
+        public const int MODERN_DIALOGUE_GUMP_INITIAL_LOCATION_X = 50;
+        public const int MODERN_DIALOGUE_GUMP_INITIAL_LOCATION_Y = 50;
+
         public static class SqlSettings
         {
             public const string MANAGED_ZLIB = "USE_MANAGED_ZLIB";
