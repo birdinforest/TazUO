@@ -4,8 +4,10 @@ using System.IO;
 using System.Text.Json;
 using System.Text;
 using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
+using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
 using ClassicUO.Network;
@@ -13,7 +15,6 @@ using ClassicUO.Renderer;
 using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
-using ClassicUO.Game;
 
 namespace ClassicUO.Game.UI.Gumps;
 
@@ -167,9 +168,25 @@ public class ModernDialogueGump : Gump
         CanCloseWithRightClick = true;
         AcceptMouseInput = true;
 
-        // Initial position from server (client will calculate size)
-        X = this.x;
-        Y = this.y;
+        // Try to load saved position from profile
+        if (ProfileManager.CurrentProfile != null)
+        {
+            Point savedPosition = ProfileManager.CurrentProfile.DialogueGumpPosition;
+            X = savedPosition.X;
+            Y = savedPosition.Y;
+            this.x = savedPosition.X;
+            this.y = savedPosition.Y;
+            Log.Info($"[ModernDialogueGump] Loaded saved position from profile: X={X}, Y={Y}");
+        }
+        else
+        {
+            // Use default position from constants if profile not available
+            X = Constants.MODERN_DIALOGUE_GUMP_INITIAL_LOCATION_X;
+            Y = Constants.MODERN_DIALOGUE_GUMP_INITIAL_LOCATION_Y;
+            this.x = X;
+            this.y = Y;
+            Log.Info($"[ModernDialogueGump] Profile not available, using default position: X={X}, Y={Y}");
+        }
 
         // Width and Height will be calculated after building the gump
         Width = 0;
@@ -202,6 +219,9 @@ public class ModernDialogueGump : Gump
 
         // Calculate width and height after building all UI elements
         CalculateAndSetSize();
+
+        // Ensure position is within window bounds after initial size calculation
+        ClampToWindowBounds();
     }
 
     /// <summary>
@@ -264,6 +284,18 @@ public class ModernDialogueGump : Gump
         // Restore position (preserve user's drag position)
         X = savedX;
         Y = savedY;
+        this.x = savedX;
+        this.y = savedY;
+
+        // Ensure position is still within window bounds after size change
+        ClampToWindowBounds();
+
+        // Save position to profile for next time
+        if (ProfileManager.CurrentProfile != null)
+        {
+            ProfileManager.CurrentProfile.DialogueGumpPosition = new Point(X, Y);
+            Log.Info($"[ModernDialogueGump] Saved position to profile: X={X}, Y={Y}");
+        }
 
         Log.Info($"[ModernDialogueGump] Content updated - New size: Width={Width}, Height={Height}, Position: X={X}, Y={Y}");
     }
@@ -748,10 +780,55 @@ public class ModernDialogueGump : Gump
         base.Dispose();
     }
 
+    /// <summary>
+    /// Clamp gump position to ensure it stays within window bounds
+    /// </summary>
+    private void ClampToWindowBounds()
+    {
+        if (Client.Game?.Window == null)
+            return;
+
+        Rectangle windowBounds = Client.Game.Window.ClientBounds;
+
+        // Ensure gump doesn't go off-screen
+        // At least 100px of the gump should be visible on each edge
+        // minX: allows gump to be mostly off left, but 100px visible on right
+        // maxX: allows gump to be mostly off right, but 100px visible on left
+        int minX = -Width + 100;
+        int minY = -Height + 100;
+        int maxX = windowBounds.Width - 100; // At least 100px should be visible on right
+        int maxY = windowBounds.Height - 100; // At least 100px should be visible on bottom
+
+        // Clamp position
+        int clampedX = Math.Clamp(X, minX, maxX);
+        int clampedY = Math.Clamp(Y, minY, maxY);
+
+        if (clampedX != X || clampedY != Y)
+        {
+            Log.Info($"[ModernDialogueGump] Clamped position from ({X}, {Y}) to ({clampedX}, {clampedY}) to fit window bounds");
+            X = clampedX;
+            Y = clampedY;
+            this.x = clampedX;
+            this.y = clampedY;
+        }
+    }
+
     protected override void OnDragEnd(int x, int y)
     {
-        this.x = x;
-        this.y = y;
+        // Note: x and y are relative coordinates, not absolute
+        // The base class has already updated X and Y to the correct absolute position
+        // We just need to save the current position and clamp it if needed
+
+        // Clamp to window bounds to ensure gump stays visible
+        ClampToWindowBounds();
+
+        // Save position to profile for next time (after clamping)
+        if (ProfileManager.CurrentProfile != null)
+        {
+            ProfileManager.CurrentProfile.DialogueGumpPosition = new Point(X, Y);
+            Log.Info($"[ModernDialogueGump] Saved position to profile after drag: X={X}, Y={Y}");
+        }
+
         base.OnDragEnd(x, y);
     }
 }
