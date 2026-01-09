@@ -56,35 +56,117 @@ namespace ClassicUO.Game.UI.Gumps
 
             if (graphic != ushort.MaxValue)
             {
-                gumpPic = new GumpPic(0, 2, graphic, 0);
-                background.X = gumpPic.Width;
-                background.Width = COOL_DOWN_WIDTH - gumpPic.Width;
+                // Create gumpPic for any valid graphic (including 0x0000 for custom icons)
+                // GumpPic will handle loading custom icons via GumpsLoader.TryLoadCustomBuffIcon
+                try
+                {
+                    gumpPic = new GumpPic(0, 2, graphic, 0);
+                    int picWidth = Math.Max(gumpPic.Width, 0);
 
-                foreground.X = gumpPic.Width;
-                foreground.Width = COOL_DOWN_WIDTH - gumpPic.Width;
+                    // If picWidth is 0, it means the icon failed to load, use default icon size
+                    if (picWidth == 0 && graphic == 0x0000)
+                    {
+                        // Custom icon failed to load, use a default size (typically 24x24 for buff icons)
+                        picWidth = 24;
+                    }
+
+                    background.X = picWidth;
+                    background.Width = Math.Max(COOL_DOWN_WIDTH - picWidth, 50); // Ensure minimum width
+
+                    foreground.X = picWidth;
+                    foreground.Width = Math.Max(COOL_DOWN_WIDTH - picWidth, 50);
+                }
+                catch (Exception ex)
+                {
+                    // Continue without gumpPic, use full width
+                    background.X = 0;
+                    background.Width = COOL_DOWN_WIDTH;
+                    foreground.X = 0;
+                    foreground.Width = COOL_DOWN_WIDTH;
+                    gumpPic = null; // Ensure gumpPic is null if creation failed
+                }
             }
 
             #region LABELS
-            if (_name.Length > 17)
+            // Safety checks for text rendering
+            if (string.IsNullOrWhiteSpace(_name))
             {
-                _name = _name.Substring(0, 16) + "..";
+                _name = "Buff"; // Fallback for empty names
             }
-            textLabel = new Label(_name, true, _hue, background.Width, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
-            {
-                X = background.X
-            };
 
-            cooldownLabel = new Label("------", true, _hue, background.Width, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+            // Limit text length to prevent overflow in font rendering
+            const int MAX_TEXT_LENGTH = 17;
+            if (_name.Length > MAX_TEXT_LENGTH)
             {
-                X = background.X,
-                Y = 0
-            };
-            cooldownLabel.Y = COOL_DOWN_HEIGHT - cooldownLabel.Height - 2;
-            cooldownLabel.Text = "";
+                _name = _name.Substring(0, MAX_TEXT_LENGTH - 2) + "..";
+            }
+
+            // Ensure background width is valid (must be positive and reasonable)
+            int labelWidth = Math.Max(Math.Min(background.Width, 500), 50); // Clamp between 50 and 500
+
+            try
+            {
+                textLabel = new Label(_name, true, _hue, labelWidth, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                {
+                    X = background.X
+                };
+            }
+            catch (Exception ex)
+            {
+                // Fallback to safe text if rendering fails
+                try
+                {
+                    textLabel = new Label("Buff", true, _hue, labelWidth, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                    {
+                        X = background.X
+                    };
+                }
+                catch
+                {
+                    // Last resort: create minimal label
+                    textLabel = new Label("B", true, _hue, 50, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                    {
+                        X = background.X
+                    };
+                }
+            }
+
+            // Create cooldownLabel with same safety checks
+            try
+            {
+                int cooldownWidth = Math.Max(Math.Min(background.Width, 500), 50);
+                cooldownLabel = new Label("------", true, _hue, cooldownWidth, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                {
+                    X = background.X,
+                    Y = 0
+                };
+                cooldownLabel.Y = COOL_DOWN_HEIGHT - cooldownLabel.Height - 2;
+                cooldownLabel.Text = "";
+            }
+            catch (Exception ex)
+            {
+                try
+                {
+                    cooldownLabel = new Label("", true, _hue, 50, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                    {
+                        X = background.X,
+                        Y = COOL_DOWN_HEIGHT - 15
+                    };
+                }
+                catch
+                {
+                    // Last resort: create minimal label
+                    cooldownLabel = new Label("", true, _hue, 50, style: FontStyle.BlackBorder, align: Assets.TEXT_ALIGN_TYPE.TS_CENTER)
+                    {
+                        X = 0,
+                        Y = 0
+                    };
+                }
+            }
             #endregion
 
             #region ADD CONTROLS
-            if (graphic != ushort.MaxValue)
+            if (gumpPic != null)
                 Add(gumpPic);
             Add(background);
             Add(foreground);

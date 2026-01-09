@@ -17,6 +17,11 @@ namespace ClassicUO.Assets
     {
         public const int MAX_GUMP_DATA_INDEX_COUNT = 0x10000;
 
+        // Custom icon range: graphic IDs >= CUSTOM_ICON_START are considered custom icons
+        // Graphic ID 0x0000 is used as a placeholder to trigger custom icon loading
+        private const ushort CUSTOM_ICON_START = 0x500;
+        private const ushort CUSTOM_ICON_PLACEHOLDER = 0x0000;
+
         // Debug flag: controlled by DEBUG_GUMP_LOADING environment variable
         private static readonly bool _debugGumpLoading =
             System.Environment.GetEnvironmentVariable("DEBUG_GUMP_LOADING")?.ToLower() == "true";
@@ -121,22 +126,61 @@ namespace ClassicUO.Assets
             }
         }
 
+        /// <summary>
+        /// Checks if a graphic ID represents a custom icon that should be loaded from external files.
+        /// Custom icons are identified by:
+        /// 1. Graphic ID 0x0000 (placeholder used in BuffTable to trigger custom loading)
+        /// 2. Graphic IDs >= CUSTOM_ICON_START (0x500) that are in the custom icon range
+        /// </summary>
+        private bool IsCustomIcon(uint graphicId)
+        {
+            return graphicId == CUSTOM_ICON_PLACEHOLDER || graphicId >= CUSTOM_ICON_START;
+        }
+
         public GumpInfo GetGump(uint index)
         {
+            // Check if this is a custom icon that should be loaded from external files
+            bool isCustomIcon = IsCustomIcon(index);
+
+            // For custom icons (0x0000 placeholder or >= 0x500), try loading custom icon first
+            if (isCustomIcon)
+            {
+                if (_debugGumpLoading)
+                    Log.Debug($"[GumpsLoader] GetGump called for custom icon 0x{index:X4}, attempting to load custom buff icon");
+
+                GumpInfo customGump = TryLoadCustomBuffIcon((ushort)index);
+                if (customGump.Width > 0 && customGump.Height > 0)
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Successfully loaded custom icon 0x{index:X4}: {customGump.Width}x{customGump.Height}");
+                    return customGump;
+                }
+                else
+                {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Failed to load custom icon 0x{index:X4} (Width={customGump.Width}, Height={customGump.Height}), will check file entry");
+                    // Continue to check file entry as fallback
+                }
+            }
+
+            // Try to load from standard gump files first
             ref UOFileIndex entry = ref _file.GetValidRefEntry((int)index);
 
+            // If gump file entry is missing or invalid, try custom icon as fallback
             if (entry.CompressionFlag != CompressionType.ZlibBwt && entry.Width <= 0 && entry.Height <= 0)
             {
                 // Try to load custom icon as fallback for missing gump
                 GumpInfo customGump = TryLoadCustomBuffIcon((ushort)index);
                 if (customGump.Width > 0 && customGump.Height > 0)
                 {
+                    if (_debugGumpLoading)
+                        Log.Debug($"[GumpsLoader] Custom icon fallback succeeded for gump 0x{index:X4}: {customGump.Width}x{customGump.Height}");
                     return customGump;
                 }
                 else
                 {
                     if (_debugGumpLoading)
-                        Log.Debug($"[GumpsLoader] Custom icon fallback failed for gump {index}");
+                        Log.Debug($"[GumpsLoader] Custom icon fallback failed for gump 0x{index:X4}");
                 }
                 return default;
             }
@@ -225,9 +269,15 @@ namespace ClassicUO.Assets
         /// <summary>
         /// Tries to load a custom buff icon from gumpartassets/icons/ when a gump is missing.
         /// Uses the graphic ID directly as the filename (e.g., icon-0x7560.png or icon-30048.png).
+        ///
+        /// Loading order:
+        /// 1. Check cache (for embedded resources)
+        /// 2. Try embedded resources (from assembly manifest)
+        /// 3. Try external files (from executable directory)
         /// </summary>
         private GumpInfo TryLoadCustomBuffIcon(ushort gumpId)
         {
+            bool isCustomIcon = IsCustomIcon(gumpId);
             if (_debugGumpLoading)
                 Log.Debug($"[GumpsLoader] TryLoadCustomBuffIcon: gumpId={gumpId} (0x{gumpId:X4})");
 
@@ -236,7 +286,7 @@ namespace ClassicUO.Assets
             if (_customIconCache.TryGetValue(gumpId, out CachedIcon cachedIcon))
             {
                 if (_debugGumpLoading)
-                    Log.Debug($"[GumpsLoader] Using cached embedded icon for gumpId {gumpId}: {cachedIcon.Width}x{cachedIcon.Height}");
+                    Log.Debug($"[GumpsLoader] Using cached embedded icon for gumpId 0x{gumpId:X4}: {cachedIcon.Width}x{cachedIcon.Height}");
                 // Return cached icon immediately - no need to reload
                 return new GumpInfo()
                 {
@@ -418,8 +468,14 @@ namespace ClassicUO.Assets
 
             if (texture == null)
             {
-                if (_debugGumpLoading)
-                    Log.Debug($"[GumpsLoader] Failed to load texture");
+                if (_debugGumpLoading || isCustomIcon)
+                {
+                    Log.Warn($"[GumpsLoader] Failed to load custom icon for gumpId 0x{gumpId:X4}. Tried files: {string.Join(", ", filenameFormats)}");
+                    if (gumpId == CUSTOM_ICON_PLACEHOLDER)
+                    {
+                        Log.Warn($"[GumpsLoader] Expected icon file: icon-0x0000.png in gumpartassets/icons/ (or embedded as resource)");
+                    }
+                }
                 return default;
             }
 
@@ -430,8 +486,10 @@ namespace ClassicUO.Assets
                 return default;
             }
 
-            if (_debugGumpLoading)
-                Log.Debug($"[GumpsLoader] Texture loaded successfully: {texture.Width}x{texture.Height}");
+            if (_debugGumpLoading || isCustomIcon)
+            {
+                Log.Debug($"[GumpsLoader] Texture loaded successfully for gumpId 0x{gumpId:X4}: {texture.Width}x{texture.Height} from {(embeddedStream != null ? "embedded resource" : iconPath ?? "unknown")}");
+            }
 
             // Convert Texture2D to GumpInfo pixel data
             int width = texture.Width;

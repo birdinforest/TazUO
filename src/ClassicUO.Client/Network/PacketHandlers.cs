@@ -5773,11 +5773,32 @@ sealed class PacketHandlers
                     ushort arg_length = p.ReadUInt16BE();
                     string str = p.ReadUnicodeLE(2);
                     string args = str + p.ReadUnicodeLE();
-                    string title = Client.Game.UO.FileManager.Clilocs.Translate(
-                        (int)titleCliloc,
-                        args,
-                        true
-                    );
+
+                    // If cliloc is 0, use the args directly as the title (for custom buffs like BowCooldown)
+                    string title;
+                    if (titleCliloc == 0 && !string.IsNullOrWhiteSpace(args))
+                    {
+                        // Remove leading tab if present (server adds \t prefix)
+                        title = args.TrimStart('\t').Trim();
+                    }
+                    else
+                    {
+                        title = Client.Game.UO.FileManager.Clilocs.Translate(
+                            (int)titleCliloc,
+                            args,
+                            true
+                        );
+                    }
+
+                    // Safety check: if title is empty or too long, use a fallback
+                    if (string.IsNullOrWhiteSpace(title))
+                    {
+                        title = args.TrimStart('\t').Trim();
+                        if (string.IsNullOrWhiteSpace(title))
+                        {
+                            title = "Buff"; // Fallback
+                        }
+                    }
 
                     arg_length = p.ReadUInt16BE();
                     string args_2 = p.ReadUnicodeLE();
@@ -5821,7 +5842,6 @@ sealed class PacketHandlers
                     bool alreadyExists = world.Player.IsBuffIconExists(ic);
 
                     ushort graphic = BuffTable.Table[iconID];
-
                     world.Player.AddBuff(ic, graphic, timer, text, title);
 
                     if (!alreadyExists)

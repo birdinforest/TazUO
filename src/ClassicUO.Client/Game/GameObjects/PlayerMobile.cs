@@ -319,10 +319,6 @@ namespace ClassicUO.Game.GameObjects
                 EventSink.InvokeOnBuffRemoved(null, new BuffEventArgs(ev));
                 _buffIcons.Remove(graphic);
             }
-            else
-            {
-                Console.WriteLine($"[CLIENT_REMOVE] Buff {graphic} not found in _buffIcons. Current buffs: {string.Join(", ", _buffIcons.Keys)}");
-            }
 
             // Update both buff gumps
             BuffGump buffGump = UIManager.GetGump<BuffGump>();

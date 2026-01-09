@@ -133,6 +133,9 @@ namespace ClassicUO.Game.Data
         WraithForm,
         CityTradeDeal = 0x466,
         HumilityDebuff = 0x467,
+        // Custom icons range starts at 0x500 (array index 279)
+        BowCooldown = 0x500,  // Bow attack cooldown icon
+        MeleeCooldown = 0x501,  // Melee attack cooldown icon
         Spirituality,
         Humility,
         // Skill Masteries
@@ -236,11 +239,38 @@ namespace ClassicUO.Game.Data
                     }
                 }
 
+                // Extend array to support custom icons (at least 281 elements for index 280 - MeleeCooldown)
+                const int MIN_REQUIRED_LENGTH = 281; // For MeleeCooldown at index 280
+                int originalLength = tempList.Count;
+
+                // Fill gap if needed (indices 190-278)
+                while (tempList.Count < 279)
+                {
+                    tempList.Add(0x0000); // Placeholder for unused indices
+                }
+
+                // Add custom icons at correct indices if not already present
+                if (tempList.Count == 279)
+                {
+                    tempList.Add(0x0500);  // Index 279: BowCooldown (0x500)
+                }
+                if (tempList.Count == 280)
+                {
+                    tempList.Add(0x0501);  // Index 280: MeleeCooldown (0x501)
+                }
+
+                // Ensure we have at least MIN_REQUIRED_LENGTH
+                while (tempList.Count < MIN_REQUIRED_LENGTH)
+                {
+                    tempList.Add(0x0000); // Additional placeholders if needed
+                }
+
                 _table = tempList.ToArray();
             }
             else
             {
-                _table = _defaultTable;
+                // Use pre-extended default table with custom icons at correct indices
+                _table = _extendedDefaultTable;
             }
         }
 
@@ -439,7 +469,33 @@ namespace ClassicUO.Game.Data
             0x5DE6,
             0x5D51,
 
-            0x0951
+            0x0951,
+
+            // Fill gap between standard icons (index 189) and custom icons (index 279)
+            // Need 89 filler elements (indices 190-278) to reach custom icon range
+            // Using 0x0000 as placeholder - these will never be used but needed for correct indexing
         };
+
+        // Extend _defaultTable to include custom icons at correct indices
+        private static ushort[] GetExtendedDefaultTable()
+        {
+            var extended = new List<ushort>(_defaultTable);
+
+            // Fill gap: indices 190-278 (89 elements)
+            while (extended.Count < 279)
+            {
+                extended.Add(0x0000); // Placeholder for unused indices
+            }
+
+            // Add custom icons at correct indices (279 and 280)
+            // Use actual BuffIconType values to trigger custom icon loading from gumpartassets/icons/
+            // GumpsLoader will detect these values (>= 0x500) and load corresponding icon files
+            extended.Add(0x0500);  // Index 279: BowCooldown (0x500) - will load icon-0x0500.png
+            extended.Add(0x0501);  // Index 280: MeleeCooldown (0x501) - will load icon-0x0501.png
+
+            return extended.ToArray();
+        }
+
+        private static ushort[] _extendedDefaultTable = GetExtendedDefaultTable();
     }
 }
