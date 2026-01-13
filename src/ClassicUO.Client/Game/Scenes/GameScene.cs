@@ -884,6 +884,9 @@ namespace ClassicUO.Game.Scenes
                 return;
             }
 
+            // Update charged shot input state
+            UpdateChargedShotInput();
+
             if (Time.Ticks > _timePing)
             {
                 AsyncNetClient.Socket.Statistics.SendPing();
@@ -903,6 +906,9 @@ namespace ClassicUO.Game.Scenes
             _world.BoatMovingManager.Update();
             _world.Player.Pathfinder.ProcessAutoWalk();
             _world.DelayedObjectClickManager.Update();
+
+            // Update advanced animation system
+            AnimationSystem.Instance.Update(_world);
 
 
             if (

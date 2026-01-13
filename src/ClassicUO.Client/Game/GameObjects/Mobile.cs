@@ -8,6 +8,7 @@ using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Resources;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Collections;
+using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
 using ClassicUO.Assets;
 
@@ -370,8 +371,23 @@ namespace ClassicUO.Game.GameObjects
             CalculateRandomIdleTime();
         }
 
+        /// <summary>
+        /// Resets the animation group to unset (0xFF), forcing the system to recalculate
+        /// the correct animation based on the mobile's current state.
+        /// This is used after custom animations complete to return to normal animation flow.
+        /// </summary>
+        public void ResetAnimationGroup()
+        {
+            _animationGroup = 0xFF; // Unset animation group
+            AnimationFromServer = false; // Clear server animation flag
+            LastAnimationChangeTime = Time.Ticks - 1000; // Force immediate recalculation
+            Log.Trace($"[Mobile.ResetAnimationGroup] Mobile={Serial}, Name={Name}, _animationGroup reset to 0xFF, AnimationFromServer=false");
+        }
+
         public void SetIdleAnimation()
         {
+            Log.Trace($"[Mobile.SetIdleAnimation] Mobile={Serial}, Name={Name}, IsMounted={IsMounted}, InWarMode={InWarMode}, ExecuteAnimation={ExecuteAnimation}, AnimGroup={_animationGroup}, AnimFromServer={AnimationFromServer}");
+
             CalculateRandomIdleTime();
 
             if (!IsMounted && !InWarMode && ExecuteAnimation)
@@ -578,6 +594,12 @@ namespace ClassicUO.Game.GameObjects
 
             ushort id = GetGraphicForAnimation();
             byte action = GetGroupForAnimation(this, id, true);
+
+            // Debug logging for BirdinForest
+            if (Name == "BirdinForest" && action == 27)
+            {
+                Log.Trace($"[Mobile.ProcessAnimation] LEGACY SYSTEM PLAYING ACTION 27! Serial={Serial}, AnimFromServer={AnimationFromServer}, _animationGroup={_animationGroup}, ExecuteAnimation={ExecuteAnimation}, InWarMode={InWarMode}");
+            }
 
             bool mirror = false;
             animations.GetAnimDirection(ref dir, ref mirror);
@@ -1076,6 +1098,9 @@ namespace ClassicUO.Game.GameObjects
             uint serial = Serial & 0x3FFFFFFF;
 
             ClearSteps();
+
+            // Clean up advanced animation state
+            AnimationSystem.Instance.RemoveState(Serial);
 
             base.Destroy();
 

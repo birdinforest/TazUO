@@ -4713,5 +4713,68 @@ namespace ClassicUO.Network
             writer.WriteUInt32BE(serial); // Tools
             writer.WriteUInt16BE((ushort)resourceType); // Resource type
         }
+
+        /// <summary>
+        /// Sends charged shot control packet (0xBF subcommand 0x0032)
+        /// </summary>
+        /// <param name="action">0x01 = Start Charging, 0x02 = Release</param>
+        public static void Send_ChargedShotControl(this AsyncNetClient socket, byte action)
+        {
+            Console.WriteLine($"Send_ChargedShotControl: action=0x{action:X2}, socket.IsConnected={socket?.IsConnected}");
+
+            const byte ID = 0xBF; // Extended command packet
+
+            int length = AsyncNetClient.PacketsTable.GetPacketLength(ID);
+            Console.WriteLine($"Send_ChargedShotControl: packet length={length}");
+
+            var writer = new StackDataWriter(length < 0 ? 64 : length);
+
+            writer.WriteUInt8(ID);
+
+            if (length < 0)
+            {
+                writer.WriteZero(2); // Placeholder for length
+            }
+
+            writer.WriteUInt16BE(0x33); // Subcommand: 0x33 (Charged Shot)
+            writer.WriteUInt8(action);    // Action: 0x01 or 0x02
+
+            if (length < 0)
+            {
+                writer.Seek(1, SeekOrigin.Begin);
+                writer.WriteUInt16BE((ushort)writer.BytesWritten);
+            }
+            else
+            {
+                writer.WriteZero(length - writer.BytesWritten);
+            }
+
+            System.ReadOnlySpan<byte> buffer = writer.BufferWritten;
+            byte[] bufferArray = buffer.ToArray();
+            Console.WriteLine($"Send_ChargedShotControl: About to send packet, length={buffer.Length}, bytes=[{string.Join(" ", bufferArray.Take(Math.Min(10, bufferArray.Length)).Select(b => $"0x{b:X2}"))}]");
+
+            socket.Send(writer.BufferWritten);
+            writer.Dispose();
+
+            Console.WriteLine($"Send_ChargedShotControl: Packet sent");
+        }
+
+        /// <summary>
+        /// Convenience method: Start charging bow
+        /// </summary>
+        public static void Send_ChargedShotStart(this AsyncNetClient socket)
+        {
+            Console.WriteLine("Send_ChargedShotStart-");
+            socket.Send_ChargedShotControl(0x01);
+        }
+
+        /// <summary>
+        /// Convenience method: Release charged shot
+        /// </summary>
+        public static void Send_ChargedShotRelease(this AsyncNetClient socket)
+        {
+            Console.WriteLine("Send_ChargedShotRelease-");
+            socket.Send_ChargedShotControl(0x02);
+        }
     }
 }

@@ -1,0 +1,37 @@
+######################## [START LOG] ########################
+TazUO [STANDARD_BUILD] - 4.15.0.0 - 01/09/2026 19:08:03
+Framework: .NET 9.0.11
+OS: Darwin 24.5.0 Darwin Kernel Version 24.5.0: Tue Apr 22 19:54:49 PDT 2025; root:xnu-11417.121.6~2/RELEASE_ARM64_T6000 (Arm64)
+Thread: CUO_MAIN_THREAD
+
+Shard: 192.168.1.206
+ClientVersion: 5.0.9.0
+
+Exception:
+System.OverflowException: Arg_OverflowException
+   at ClassicUO.Assets.FontsLoader.GeneratePixelsUnicode(Byte font, String str, UInt16 color, Byte cell, Int32 width, TEXT_ALIGN_TYPE align, UInt16 flags, Boolean saveHitmap) in /Users/forrrest/projects/TazUO/src/ClassicUO.Assets/FontsLoader.cs:line 1711
+   at ClassicUO.Assets.FontsLoader.GenerateUnicode(Byte font, String str, UInt16 color, Byte cell, Int32 width, TEXT_ALIGN_TYPE align, UInt16 flags, Boolean saveHitmap, Int32 height) in /Users/forrrest/projects/TazUO/src/ClassicUO.Assets/FontsLoader.cs:line 1124
+   at ClassicUO.Game.RenderedText.CreateTexture() in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/GameObjects/RenderedText.cs:line 602
+   at ClassicUO.Game.RenderedText.set_Text(String value) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/GameObjects/RenderedText.cs:line 113
+   at ClassicUO.Game.RenderedText.Create(String text, UInt16 hue, Byte font, Boolean isunicode, FontStyle style, TEXT_ALIGN_TYPE align, Int32 maxWidth, Byte cell, Boolean isHTML, Boolean recalculateWidthByInfo, Boolean saveHitmap) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/GameObjects/RenderedText.cs:line 200
+   at ClassicUO.Game.UI.Controls.Label..ctor(String text, Boolean isunicode, UInt16 hue, Int32 maxwidth, Byte font, FontStyle style, TEXT_ALIGN_TYPE align, Boolean ishtml) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/UI/Controls/Label.cs:line 26
+   at ClassicUO.Game.UI.Gumps.CoolDownBar..ctor(World world, TimeSpan _duration, String _name, UInt16 _hue, Int32 x, Int32 y, UInt16 graphic, BuffIconType type, Boolean isBuffBar) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/UI/Gumps/CoolDownBar.cs:line 72
+   at ClassicUO.Game.UI.Gumps.ImprovedBuffGump.AddBuff(BuffIcon icon) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/UI/Gumps/ImprovedBuffGump.cs:line 37
+   at ClassicUO.Game.GameObjects.PlayerMobile.AddBuff(BuffIconType type, UInt16 graphic, UInt32 time, String text, String title) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Game/GameObjects/PlayerMobile.cs:line 313
+   at ClassicUO.Network.PacketHandlers.BuffDebuff(World world, StackDataReader& p) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Network/PacketHandlers.cs:line 5854
+   at ClassicUO.Network.PacketHandlers.AnalyzePacket(World world, ReadOnlySpan`1 data, Int32 offset) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Network/PacketHandlers.cs:line 190
+   at ClassicUO.Network.PacketHandlers.ParsePackets(World world, CircularBuffer stream, Boolean allowPlugins) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Network/PacketHandlers.cs:line 160
+   at ClassicUO.Network.PacketHandlers.ParsePackets(World world, Span`1 data) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Network/PacketHandlers.cs:line 96
+   at ClassicUO.GameController.ProcessNetworkPackets() in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/GameController.cs:line 153
+   at ClassicUO.GameController.Update(GameTime gameTime) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/GameController.cs:line 422
+   at Microsoft.Xna.Framework.Game.Tick() in /Users/forrrest/projects/TazUO/external/FNA/src/Game.cs:line 544
+   at Microsoft.Xna.Framework.Game.RunLoop() in /Users/forrrest/projects/TazUO/external/FNA/src/Game.cs:line 876
+   at Microsoft.Xna.Framework.Game.Run() in /Users/forrrest/projects/TazUO/external/FNA/src/Game.cs:line 417
+   at ClassicUO.Client.Run(IPluginHost pluginHost) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Client.cs:line 223
+   at ClassicUO.Bootstrap.Boot(UnmanagedAssistantHost pluginHost, String[] args) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Main.cs:line 222
+   at ClassicUO.Bootstrap.Main(String[] args) in /Users/forrrest/projects/TazUO/src/ClassicUO.Client/Main.cs:line 38
+######################## [END LOG] ########################
+
+
+
+

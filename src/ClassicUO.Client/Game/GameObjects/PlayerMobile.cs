@@ -133,6 +133,10 @@ namespace ClassicUO.Game.GameObjects
         /// </summary>
         public bool IsRecovering => IsCasting; //May incorporate this again later, for now just reference is casting
 
+        // Charged shot state tracking
+        public bool IsChargingShot { get; set; } = false;
+        public DateTime ChargeStartTime { get; set; } = DateTime.MinValue;
+
         public Item FindBandage(ushort graphic = 0x0E21)
         {
             Item backpack = Backpack;
@@ -1029,6 +1033,50 @@ namespace ClassicUO.Game.GameObjects
             GetGroupForAnimation(this, 0, true);
 
             return true;
+        }
+
+        /// <summary>
+        /// Checks if player can start charging a bow shot
+        /// </summary>
+        public bool CanStartChargedShot()
+        {
+            // Must be alive and in-game
+            if (IsDead || World == null)
+                return false;
+
+            // Must have a ranged weapon equipped (two-handed layer)
+            Item weapon = FindItemByLayer(Layer.TwoHanded);
+            if (weapon == null)
+                return false;
+
+            // Check if it's a bow/crossbow (by graphic ID)
+            if (!IsRangedWeaponGraphic(weapon.Graphic))
+                return false;
+
+            // Must be in war mode
+            if (!InWarMode)
+                return false;
+
+            // Not already charging
+            if (IsChargingShot)
+                return false;
+
+            return true;
+        }
+
+        /// <summary>
+        /// Checks if a graphic ID is a ranged weapon
+        /// </summary>
+        private bool IsRangedWeaponGraphic(ushort graphic)
+        {
+            // Bow graphics
+            if (graphic == 0x13B2 || graphic == 0x13B1) return true; // Bow
+
+            // Crossbow graphics
+            if (graphic == 0x0F50 || graphic == 0x0F4F) return true; // Crossbow
+            if (graphic == 0x13FD || graphic == 0x13FC) return true; // Heavy Crossbow
+
+            return false;
         }
     }
 }

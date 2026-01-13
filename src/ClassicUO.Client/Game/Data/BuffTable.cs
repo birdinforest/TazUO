@@ -492,6 +492,7 @@ namespace ClassicUO.Game.Data
             // GumpsLoader will detect these values (>= 0x500) and load corresponding icon files
             extended.Add(0x0500);  // Index 279: BowCooldown (0x500) - will load icon-0x0500.png
             extended.Add(0x0501);  // Index 280: MeleeCooldown (0x501) - will load icon-0x0501.png
+            extended.Add(0x0502);  // Index 281: ChargedShot (0x502) - will load icon-0x0502.png
 
             return extended.ToArray();
         }

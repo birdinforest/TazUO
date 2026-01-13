@@ -1,6 +1,8 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
+using System;
 using System.Diagnostics;
+using System.Text;
 
 namespace ClassicUO.Utility.Logging
 {
@@ -65,5 +67,30 @@ namespace ClassicUO.Utility.Logging
         public static void PushIndent() => _logger?.PushIndent();
 
         public static void PopIndent() => _logger?.PopIndent();
+
+        /// <summary>
+        /// Logs the call stack for debugging purposes
+        /// </summary>
+        /// <param name="methodName">Name of the method calling this function</param>
+        public static void LogCallStack(string methodName)
+        {
+            StackTrace stackTrace = new StackTrace(true);
+            StringBuilder sb = new StringBuilder();
+            sb.AppendLine($"{methodName}() called from:");
+
+            for (int i = 1; i < Math.Min(stackTrace.FrameCount, 6); i++) // Skip frame 0 (this method), show up to 5 frames
+            {
+                StackFrame frame = stackTrace.GetFrame(i);
+                if (frame != null)
+                {
+                    string callerMethodName = frame.GetMethod()?.Name ?? "Unknown";
+                    string callerClassName = frame.GetMethod()?.DeclaringType?.Name ?? "Unknown";
+                    int lineNumber = frame.GetFileLineNumber();
+                    sb.AppendLine($"  [{i}] {callerClassName}.{callerMethodName}() at line {lineNumber}");
+                }
+            }
+
+            Trace(sb.ToString());
+        }
     }
 }

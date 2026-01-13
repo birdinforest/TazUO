@@ -33,6 +33,7 @@ namespace ClassicUO.Game.Scenes
         private bool _requestedWarMode;
         private bool _rightMousePressed,
             _continueRunning;
+        private bool _leftMouseWasPressed = false;
         private Point _selectionStart,
             _selectionEnd;
         private int AnchorOffset => ProfileManager.CurrentProfile.DragSelectAsAnchor ? 0 : 2;
@@ -89,6 +90,95 @@ namespace ClassicUO.Game.Scenes
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Handles charged shot input (left mouse button hold/release)
+        /// </summary>
+        private void UpdateChargedShotInput()
+        {
+            // Only process if player exists and is in game
+            if (!_world.InGame || _world.Player == null)
+            {
+                return;
+            }
+
+            // Don't process if UI has focus or is being interacted with
+            if (!UIManager.IsMouseOverWorld || UIManager.IsDragging)
+            {
+                return;
+            }
+
+            // Don't process if targeting cursor is active
+            if (_world.TargetManager.IsTargeting)
+            {
+                return;
+            }
+
+            // Don't process if a non-chat UI control has keyboard focus (e.g., text input in a gump)
+            // Chat text box focus is normal and shouldn't block mouse input for charged shot
+            if (UIManager.KeyboardFocusControl != null &&
+                UIManager.KeyboardFocusControl != UIManager.SystemChat?.TextBoxControl)
+            {
+                return;
+            }
+
+            PlayerMobile player = _world.Player;
+            bool leftMousePressed = _isMouseLeftDown;
+
+            // If war mode was just disabled, cancel charging
+            if (player.IsChargingShot && !player.InWarMode)
+            {
+                Console.WriteLine("UpdateChargedShotInput()---------------------------------");
+                Console.WriteLine("War mode disabled, cancelling charge");
+                AsyncNetClient.Socket.Send_ChargedShotRelease();
+                player.IsChargingShot = false;
+            }
+
+            // Detect left mouse button PRESS (state change from up to down)
+            if (leftMousePressed && !_leftMouseWasPressed)
+            {
+                Console.WriteLine("LeftMousePressed");
+                // Button just pressed - try to start charging
+                if (player.CanStartChargedShot())
+                {
+                    player.IsChargingShot = true;
+                    player.ChargeStartTime = DateTime.Now;
+
+                    // Send start packet to server
+                    AsyncNetClient.Socket.Send_ChargedShotStart();
+
+                    Log.Trace("Charged shot: Started charging");
+                    Console.WriteLine("Charged shot: Started charging");
+                    Console.WriteLine("---------------------------------");
+                }
+            }
+            // Detect left mouse button RELEASE (state change from down to up)
+            else if (!leftMousePressed && _leftMouseWasPressed)
+            {
+                // Button just released
+                if (player.IsChargingShot)
+                {
+                    // Send release packet to server
+                    AsyncNetClient.Socket.Send_ChargedShotRelease();
+
+                    // Clear local state
+                    player.IsChargingShot = false;
+
+                    TimeSpan held = DateTime.Now - player.ChargeStartTime;
+                    Console.WriteLine("Held: " + held.TotalSeconds);
+                    Log.Trace($"Charged shot: Released after {held.TotalSeconds:F2}s");
+                    Console.WriteLine($"Charged shot: Released after {held.TotalSeconds:F2} seconds");
+                    Console.WriteLine("---------------------------------");
+                    if (held.TotalSeconds >= 3)
+                    {
+                        Console.WriteLine("Charged shot: Released after 3 seconds");
+                    }
+                }
+            }
+
+            // Update previous state for next frame
+            _leftMouseWasPressed = leftMousePressed;
         }
 
         private bool MoveCharByController()
@@ -421,6 +511,7 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnLeftMouseDown()
         {
+            Console.WriteLine("OnLeftMouseDown()-------------------------");
             if (
                 UIManager.PopupMenu != null
                 && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
@@ -431,6 +522,7 @@ namespace ClassicUO.Game.Scenes
 
             if (!UIManager.IsMouseOverWorld)
             {
+                Console.WriteLine("Not over world");
                 return false;
             }
 
@@ -469,6 +561,7 @@ namespace ClassicUO.Game.Scenes
                 else
                 {
                     _isMouseLeftDown = true;
+                    Console.WriteLine("Left mouse down");
                     _holdMouse2secOverItemTime = Time.Ticks;
                 }
             }
@@ -478,6 +571,7 @@ namespace ClassicUO.Game.Scenes
 
         private bool OnLeftMouseUp()
         {
+            Console.WriteLine("OnLeftMouseUp()-------------------------");
             if (
                 UIManager.PopupMenu != null
                 && !UIManager.PopupMenu.Bounds.Contains(Mouse.Position.X, Mouse.Position.Y)
@@ -500,6 +594,8 @@ namespace ClassicUO.Game.Scenes
 
             if (_isSelectionActive)
             {
+                Console.WriteLine("DragSelect");
+
                 DoDragSelect();
 
                 return true;
@@ -507,6 +603,7 @@ namespace ClassicUO.Game.Scenes
 
             if (!UIManager.IsMouseOverWorld)
             {
+                Console.WriteLine("Not over world");
                 return false;
             }
 
@@ -526,6 +623,7 @@ namespace ClassicUO.Game.Scenes
 
             if (UIManager.IsDragging)
             {
+                Console.WriteLine("Dragging UI");
                 return false;
             }
 
@@ -549,6 +647,8 @@ namespace ClassicUO.Game.Scenes
                             _world.Player.Z + 1,
                             0
                         );
+
+                    Console.WriteLine("Dropped item");
                     return true;
                 }
 

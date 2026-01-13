@@ -4959,6 +4959,10 @@ sealed class PacketHandlers
 
                 break;
 
+            case 0x0034: // Advanced Animation Control
+                HandleAdvancedAnimation(world, ref p);
+                break;
+
             case 0xBEEF: // ClassicUO commands
 
                 type = p.ReadUInt16BE();
@@ -4970,6 +4974,44 @@ sealed class PacketHandlers
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// Handles advanced animation control packet (0xBF subcommand 0x0034)
+    /// </summary>
+    private static void HandleAdvancedAnimation(World world, ref StackDataReader p)
+    {
+        // Read packet data
+        uint mobileSerial = p.ReadUInt32BE();
+        ushort action = p.ReadUInt16BE();
+        byte commandByte = p.ReadUInt8();
+        byte startFrame = p.ReadUInt8();
+        byte endFrame = p.ReadUInt8();
+        byte holdFrame = p.ReadUInt8(); // 255 = no hold frame (sentinel value when server sends null)
+        bool forward = p.ReadBool();
+        byte delay = p.ReadUInt8();
+        byte repeatCount = p.ReadUInt8();
+
+        // Convert command byte to enum
+        var command = (AnimationCommand)commandByte;
+
+        // Debug logging
+        // Note: holdFrame=255 is normal for Play/Continue/Stop commands (means "no hold frame")
+        Log.Trace($"[HandleAdvancedAnimation] Received: serial={mobileSerial}, action={action}, command={command}, start={startFrame}, end={endFrame}, hold={holdFrame} (255=no hold), forward={forward}, delay={delay}, repeat={repeatCount}");
+
+        // Process through AnimationSystem
+        AnimationSystem.Instance.ProcessAdvancedAnimation(
+            world,
+            mobileSerial,
+            action,
+            command,
+            startFrame,
+            endFrame,
+            holdFrame,
+            forward,
+            delay,
+            repeatCount
+        );
     }
 
     private static void DisplayClilocString(World world, ref StackDataReader p)
