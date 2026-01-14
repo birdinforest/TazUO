@@ -3,8 +3,8 @@
 using System;
 using ClassicUO.Game.Combat;
 using ClassicUO.Renderer;
-using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
+using ClassicUO.Assets;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -43,7 +43,9 @@ namespace ClassicUO.Game.UI.Gumps
             CanCloseWithRightClick = false;
             CanCloseWithEsc = false;
 
-            Log.Trace("[ChargedShotIndicator] Created");
+            // Ensure visibility
+            IsVisible = true;
+            IsEnabled = true;
         }
 
         public override void Update()
@@ -69,6 +71,10 @@ namespace ClassicUO.Game.UI.Gumps
 
         public override bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
+            // Call base.Draw first (it checks IsVisible)
+            if (!base.Draw(batcher, x, y))
+                return false;
+
             // Calculate progress based on charge time
             TimeSpan elapsed = DateTime.Now - _info.StartTime;
             float progress = Math.Min((float)elapsed.TotalSeconds / _info.ChargeTime, 1.0f);
@@ -77,12 +83,15 @@ namespace ClassicUO.Game.UI.Gumps
             if (_info.FullyCharged)
                 progress = 1.0f;
 
+            // Create hue vector for rendering (required for shader)
+            Vector3 hueVector = ShaderHueTranslator.GetHueVector(0, false, 1f, true);
+
             // Draw background (dark with transparency)
             var bgRect = new Rectangle(x, y, BAR_WIDTH, BAR_HEIGHT);
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(new Color(0, 0, 0, 180)),
                 bgRect,
-                Vector3.Zero
+                hueVector
             );
 
             // Draw progress fill
@@ -102,11 +111,11 @@ namespace ClassicUO.Game.UI.Gumps
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(fillColor),
                 fillRect,
-                Vector3.Zero
+                hueVector
             );
 
             // Draw border (white)
-            DrawBorder(batcher, bgRect, Color.White);
+            DrawBorder(batcher, bgRect, Color.White, hueVector);
 
             // Draw text
             string text = progress >= 1.0f
@@ -117,34 +126,34 @@ namespace ClassicUO.Game.UI.Gumps
             // Note: Using simple text rendering - TazUO font system integration might be needed
             DrawText(batcher, text, x + BAR_WIDTH / 2, y + TEXT_OFFSET_Y, Color.White);
 
-            return base.Draw(batcher, x, y);
+            return true;
         }
 
-        private void DrawBorder(UltimaBatcher2D batcher, Rectangle rect, Color color)
+        private void DrawBorder(UltimaBatcher2D batcher, Rectangle rect, Color color, Vector3 hueVector)
         {
             // Top
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(color),
                 new Rectangle(rect.X, rect.Y, rect.Width, 1),
-                Vector3.Zero
+                hueVector
             );
             // Bottom
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(color),
                 new Rectangle(rect.X, rect.Y + rect.Height - 1, rect.Width, 1),
-                Vector3.Zero
+                hueVector
             );
             // Left
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(color),
                 new Rectangle(rect.X, rect.Y, 1, rect.Height),
-                Vector3.Zero
+                hueVector
             );
             // Right
             batcher.Draw(
                 SolidColorTextureCache.GetTexture(color),
                 new Rectangle(rect.X + rect.Width - 1, rect.Y, 1, rect.Height),
-                Vector3.Zero
+                hueVector
             );
         }
 
@@ -153,7 +162,8 @@ namespace ClassicUO.Game.UI.Gumps
             // Placeholder for text rendering
             // TODO: Implement using TazUO's actual font rendering system
             // This would typically use something like:
-            // _font.Draw(batcher, text, x, y, color);
+            var renderedText = RenderedText.Create(text, (ushort)color.PackedValue, 0, true, FontStyle.None, TEXT_ALIGN_TYPE.TS_CENTER, 0, 30, false, false);
+            renderedText.Draw(batcher, x, y);
 
             // For now, this is a placeholder that doesn't render text
             // The progress bar visualization is sufficient for functionality
@@ -161,7 +171,6 @@ namespace ClassicUO.Game.UI.Gumps
 
         void IDisposable.Dispose()
         {
-            Log.Trace("[ChargedShotIndicator] Disposed");
             base.Dispose();
         }
     }

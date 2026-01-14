@@ -25,12 +25,16 @@ namespace ClassicUO.Game.Combat
         {
             _activeOperations = new Dictionary<string, SpecialCombatOperation>();
             _operationFactories = new Dictionary<string, Func<World, SpecialCombatOperation>>();
-            RegisterDefaultOperations();
         }
 
-        private void RegisterDefaultOperations() => Log.Trace(
-            "[SpecialCombatManager] Initialized (operations will be registered by their classes)"
-        );
+        private void RegisterDefaultOperations()
+        {
+            // Register default operations explicitly
+            // This is more reliable than relying on static constructors
+            RegisterOperationFactory("ChargedShot", world => new ChargedShotOperation(world));
+
+            // Others ...
+        }
 
         /// <summary>
         /// Register an operation factory
@@ -41,13 +45,12 @@ namespace ClassicUO.Game.Combat
                 return;
 
             _operationFactories[operationId] = factory;
-            Log.Trace($"[SpecialCombatManager] Registered operation factory: {operationId}");
         }
 
         public void Initialize(World world)
         {
             _world = world;
-            Log.Trace("[SpecialCombatManager] Initialized with world");
+            RegisterDefaultOperations();
         }
 
         /// <summary>
@@ -70,7 +73,6 @@ namespace ClassicUO.Game.Combat
                 {
                     operation = factory(_world);
                     _activeOperations[operationId] = operation;
-                    Log.Trace($"[SpecialCombatManager] Created operation: {operationId}");
                 }
                 else
                 {
@@ -89,7 +91,6 @@ namespace ClassicUO.Game.Combat
             {
                 _activeOperations.Remove(operationId);
                 operation.Dispose();
-                Log.Trace($"[SpecialCombatManager] Removed operation: {operationId}");
             }
         }
 
@@ -129,7 +130,6 @@ namespace ClassicUO.Game.Combat
                 }
             }
             _activeOperations.Clear();
-            Log.Trace("[SpecialCombatManager] Cleared all operations");
         }
 
         // Query methods

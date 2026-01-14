@@ -63,25 +63,14 @@ namespace ClassicUO.Game.Combat
         public override string OperationId => "ChargedShot";
         public override SpecialCombatOperationInfo Info => _info;
 
-        // Static constructor to register with manager
-        static ChargedShotOperation()
-        {
-            // Register factory with manager
-            SpecialCombatOperationManager.Instance.RegisterOperationFactory(
-                "ChargedShot",
-                world => new ChargedShotOperation(world)
-            );
-            Log.Trace("[ChargedShotOperation] Factory registered");
-        }
-
         public ChargedShotOperation(World world) : base(world)
         {
-            Log.Trace("[ChargedShotOperation] Instance created");
+            // Log.Trace("[ChargedShotOperation] Instance created");
         }
 
         protected override void OnStateEnter(SpecialCombatOperationState state)
         {
-            Log.Trace($"[ChargedShotOperation] Entered state: {state}");
+            // Log.Trace($"[ChargedShotOperation] Entered state: {state}");
 
             switch (state)
             {
@@ -89,6 +78,7 @@ namespace ClassicUO.Game.Combat
                     // Server confirmed charge started - show UI
                     _info.StartTime = DateTime.Now;
                     ShowUI();
+                    // Log.Trace("[ChargedShotOperation] In entering Preparing state");
                     PlayDrawSound();
                     break;
 
@@ -121,7 +111,7 @@ namespace ClassicUO.Game.Combat
         {
             var indicator = new ChargedShotIndicator(_world, this);
             Game.Managers.UIManager.Add(indicator);
-            Log.Trace("[ChargedShotOperation] UI indicator created and added");
+            // Log.Trace("[ChargedShotOperation] UI indicator created and added");
             return indicator;
         }
 
@@ -130,7 +120,7 @@ namespace ClassicUO.Game.Combat
             try
             {
                 Client.Game.Audio.PlaySound(0x0233); // Bow draw sound
-                Log.Trace("[ChargedShotOperation] Draw sound played");
+                // Log.Trace("[ChargedShotOperation] Draw sound played");
             }
             catch (Exception ex)
             {
@@ -142,8 +132,9 @@ namespace ClassicUO.Game.Combat
         {
             try
             {
+                // TODO: Play sound at specific animation frame.
                 Client.Game.Audio.PlaySound(0x0235); // Ready sound
-                Log.Trace("[ChargedShotOperation] Ready sound played");
+                // Log.Trace("[ChargedShotOperation] Ready sound played");
             }
             catch (Exception ex)
             {
@@ -155,8 +146,9 @@ namespace ClassicUO.Game.Combat
         {
             try
             {
+                // TODO: Play sound at specific animation frame.
                 Client.Game.Audio.PlaySound(0x0234); // Release sound
-                Log.Trace("[ChargedShotOperation] Release sound played");
+                // Log.Trace("[ChargedShotOperation] Release sound played");
             }
             catch (Exception ex)
             {
@@ -167,7 +159,7 @@ namespace ClassicUO.Game.Combat
         public override void Dispose()
         {
             base.Dispose();
-            Log.Trace("[ChargedShotOperation] Disposed");
+            // Log.Trace("[ChargedShotOperation] Disposed");
         }
     }
 }
