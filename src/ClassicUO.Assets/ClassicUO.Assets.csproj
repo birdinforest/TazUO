@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <EmbeddedResource Include="gumpartassets\**\*.png" />
+    <EmbeddedResource Include="audioassets\**\*.wav" />
+    <EmbeddedResource Include="audioassets\**\*.mp3" />
     <EmbeddedResource Include="fonts\*.ttf" />
   </ItemGroup>
 

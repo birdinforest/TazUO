@@ -1,11 +1,13 @@
 ﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using ClassicUO.IO;
+using ClassicUO.IO.Audio;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -302,6 +304,227 @@ namespace ClassicUO.Assets
             }
 
             return false;
+        }
+
+        /// <summary>
+        /// Attempts to load a sound from the audioassets directory by filename.
+        /// First checks embedded resources, then external files.
+        /// Follows the same pattern as GumpsLoader for gumpartassets.
+        /// </summary>
+        /// <param name="fileName">Name of the audio file (e.g., "bow_draw.wav" or "arrow_shot.mp3")</param>
+        /// <param name="sound">The loaded sound if successful, null otherwise</param>
+        /// <returns>True if the sound was loaded successfully, false otherwise</returns>
+        public bool TryGetSoundFromFile(string fileName, out IO.Audio.Sound sound)
+        {
+            sound = null;
+
+            if (string.IsNullOrEmpty(fileName))
+            {
+                return false;
+            }
+
+            // First, try embedded resources (from assembly manifest)
+            Assembly assembly = typeof(SoundsLoader).Assembly;
+            string assemblyName = assembly.GetName().Name;
+
+            // Try both forward slash and backslash path separators (Windows vs Unix)
+            string[] resourcePaths = {
+                $"{assemblyName}.audioassets.{fileName}",
+                $"{assemblyName}.audioassets\\{fileName}",
+                $"{assemblyName}.audioassets/{fileName}"
+            };
+
+            Console.WriteLine($"Trying to load sound from embedded resources: {string.Join(", ", resourcePaths)}");
+
+            foreach (string resourcePath in resourcePaths)
+            {
+                try
+                {
+                    Stream embeddedStream = assembly.GetManifestResourceStream(resourcePath);
+                    Console.WriteLine($"Loaded embedded resource: {fileName} {embeddedStream == null}");
+                    if (embeddedStream != null)
+                    {
+                        Console.WriteLine($"Loaded embedded resource: {fileName}");
+                        sound = LoadSoundFromEmbeddedResource(embeddedStream, fileName);
+                        if (sound != null)
+                        {
+                            Log.Trace($"[SoundsLoader] Loaded sound from embedded resource: {fileName}");
+                            return true;
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Log.Warn($"[SoundsLoader] Error loading embedded resource {fileName}: {ex.Message}");
+                }
+            }
+
+            // If embedded resource not found, check external files
+            string exePath = AppContext.BaseDirectory;
+
+            // Try multiple external file paths
+            string[] possiblePaths = {
+                Path.Combine(exePath, "audioassets", fileName),
+                Path.Combine(exePath, "ExternalAudio", fileName)
+            };
+
+            // Try AudioAssets directory based on assembly location
+            string audioAssetsDir = GetAudioAssetsDirectory();
+            if (!string.IsNullOrEmpty(audioAssetsDir))
+            {
+                Array.Resize(ref possiblePaths, possiblePaths.Length + 1);
+                possiblePaths[possiblePaths.Length - 1] = Path.Combine(audioAssetsDir, fileName);
+            }
+
+            string filePath = null;
+            foreach (string path in possiblePaths)
+            {
+                if (!string.IsNullOrEmpty(path) && File.Exists(path))
+                {
+                    filePath = path;
+                    break;
+                }
+            }
+
+            // If not found with exact name, try case-insensitive search
+            if (filePath == null)
+            {
+                foreach (string basePath in new[] {
+                    Path.Combine(exePath, "audioassets"),
+                    Path.Combine(exePath, "ExternalAudio"),
+                    audioAssetsDir
+                })
+                {
+                    if (!string.IsNullOrEmpty(basePath) && Directory.Exists(basePath))
+                    {
+                        string[] files = Directory.GetFiles(basePath, "*", SearchOption.TopDirectoryOnly);
+                        string foundFile = Array.Find(files, f =>
+                            string.Equals(Path.GetFileName(f), fileName, StringComparison.OrdinalIgnoreCase));
+
+                        if (foundFile != null)
+                        {
+                            filePath = foundFile;
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (filePath != null && File.Exists(filePath))
+            {
+                sound = LoadSoundFromExternalFile(filePath);
+                if (sound != null)
+                {
+                    Log.Trace($"[SoundsLoader] Loaded sound from external file: {filePath}");
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Loads a sound from an embedded resource stream.
+        /// </summary>
+        /// <param name="stream">The embedded resource stream</param>
+        /// <param name="fileName">Original filename for naming purposes</param>
+        /// <returns>The loaded sound, or null if loading failed</returns>
+        private IO.Audio.Sound LoadSoundFromEmbeddedResource(Stream stream, string fileName)
+        {
+            try
+            {
+                Console.WriteLine($"Loading sound from embedded resource: {fileName}");
+                using (var memoryStream = new MemoryStream())
+                {
+                    stream.CopyTo(memoryStream);
+                    byte[] audioData = memoryStream.ToArray();
+
+                    // Create a temporary file for FileSound to load
+                    string tempPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString() + Path.GetExtension(fileName));
+                    File.WriteAllBytes(tempPath, audioData);
+
+                    return new FileSound(tempPath, 0);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[SoundsLoader] Failed to load sound from embedded resource '{fileName}': {ex.Message}");
+                return null;
+            }
+            finally
+            {
+                stream?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Loads a sound from an external file path.
+        /// </summary>
+        /// <param name="filePath">Full path to the sound file</param>
+        /// <returns>The loaded sound, or null if loading failed</returns>
+        private IO.Audio.Sound LoadSoundFromExternalFile(string filePath)
+        {
+            try
+            {
+                if (!File.Exists(filePath))
+                {
+                    return null;
+                }
+
+                return new FileSound(filePath, 0);
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[SoundsLoader] Failed to load sound from file '{filePath}': {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Gets the audioassets directory path.
+        /// Tries to find it relative to the ClassicUO.Assets assembly or executable directory.
+        /// </summary>
+        /// <returns>The audioassets directory path, or null if not found</returns>
+        private string GetAudioAssetsDirectory()
+        {
+            try
+            {
+                // Try to find ClassicUO.Assets assembly location
+                Assembly assembly = typeof(SoundsLoader).Assembly;
+                string assemblyLocation = assembly.Location;
+                Console.WriteLine($"Assembly location: {assemblyLocation}");
+                if (!string.IsNullOrEmpty(assemblyLocation))
+                {
+                    string assemblyDir = Path.GetDirectoryName(assemblyLocation);
+                    Console.WriteLine($"Assembly directory: {assemblyDir}");
+                    if (!string.IsNullOrEmpty(assemblyDir))
+                    {
+                        string audioAssetsPath = Path.Combine(assemblyDir, "audioassets");
+                        Console.WriteLine($"Audio assets path: {audioAssetsPath}");
+                        if (Directory.Exists(audioAssetsPath))
+                        {
+                            Console.WriteLine($"Audio assets path exists: {audioAssetsPath}");
+                            return audioAssetsPath;
+                        }
+                    }
+                }
+
+                // Try relative to FileManager.BasePath if available
+                if (FileManager != null && !string.IsNullOrEmpty(FileManager.BasePath))
+                {
+                    string audioAssetsPath = Path.Combine(FileManager.BasePath, "audioassets");
+                    if (Directory.Exists(audioAssetsPath))
+                    {
+                        return audioAssetsPath;
+                    }
+                }
+            }
+            catch
+            {
+                // Ignore errors in directory resolution
+            }
+
+            return null;
         }
 
         public override void ClearResources() => _musicData.Clear();

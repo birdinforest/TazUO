@@ -17,6 +17,7 @@ namespace ClassicUO.Renderer.Sounds
         private readonly IO.Audio.Sound[] _sounds = new IO.Audio.Sound[MAX_SOUND_DATA_INDEX_COUNT];
         private readonly bool _useDigitalMusicFolder;
         private readonly SoundsLoader _soundsLoader;
+        private readonly Dictionary<string, IO.Audio.Sound> _soundsFromFile = new Dictionary<string, IO.Audio.Sound>(StringComparer.OrdinalIgnoreCase);
 
         public Sound(SoundsLoader soundsLoader)
         {
@@ -59,6 +60,40 @@ namespace ClassicUO.Renderer.Sounds
                 }
 
                 return music;
+            }
+
+            return null;
+        }
+
+        /// <summary>
+        /// Gets a sound by filename from the audioassets directory.
+        /// Implements caching to avoid reloading the same file multiple times.
+        /// </summary>
+        /// <param name="fileName">Name of the audio file (e.g., "bow_draw.wav" or "arrow_shot.mp3")</param>
+        /// <returns>The Sound instance if found, null otherwise</returns>
+        public IO.Audio.Sound GetSoundFromFile(string fileName)
+        {
+            Console.WriteLine($"Getting sound from file: {fileName} {string.IsNullOrEmpty(fileName)}");
+            if (string.IsNullOrEmpty(fileName))
+            {
+                Console.WriteLine($"Returning null for empty file name");
+                return null;
+            }
+
+            // Check cache first (case-insensitive)
+            if (_soundsFromFile.TryGetValue(fileName, out IO.Audio.Sound cachedSound))
+            {
+                Console.WriteLine($"Returning cached sound: {cachedSound?.Name}");
+                return cachedSound;
+            }
+
+            // Try to load from SoundsLoader
+            if (_soundsLoader.TryGetSoundFromFile(fileName, out IO.Audio.Sound sound))
+            {
+                Console.WriteLine($"Loaded sound from file: {fileName} {sound?.Name}");
+                // Cache the loaded sound
+                _soundsFromFile[fileName] = sound;
+                return sound;
             }
 
             return null;

@@ -20,6 +20,7 @@ namespace ClassicUO.Game.Managers
         private uint _lastAudioRecoveryAttempt = 0;
         private const uint AUDIO_RECOVERY_DELAY = 1000; // 1 second delay between recovery attempts
         private readonly LinkedList<UOSound> _currentSounds = new LinkedList<UOSound>();
+        private readonly LinkedList<Sound> _allPlayingSounds = new LinkedList<Sound>(); // Track all playing sounds (including FileSound)
         private readonly UOMusic[] _currentMusic = { null, null };
         private readonly int[] _currentMusicIndices = { 0, 0 };
         public int LoginMusicIndex { get; private set; }
@@ -154,6 +155,167 @@ namespace ClassicUO.Game.Managers
                     _audioDeviceDisconnected = true;
                 }
             }
+        }
+
+        /// <summary>
+        /// Plays a Sound object directly (e.g., from LoadFromFile).
+        /// </summary>
+        /// <param name="sound">The Sound object to play</param>
+        /// <param name="skipFilter">Whether to skip sound filtering</param>
+        public void PlaySound(Sound sound, bool skipFilter = false)
+        {
+            if (sound == null || !_canReproduceAudio || _audioDeviceDisconnected)
+            {
+                Log.Warn($"Failed to play sound - sound is null: {sound == null}, canReproduce: {_canReproduceAudio}, deviceDisconnected: {_audioDeviceDisconnected}");
+                return;
+            }
+
+            Profile currentProfile = ProfileManager.CurrentProfile;
+            if (currentProfile == null)
+            {
+                Log.Warn($"Failed to play sound '{sound.Name}' - profile is null");
+                return;
+            }
+
+            // Check if sound is filtered (only if it has an index)
+            if (!skipFilter && sound.Index > 0 && SoundFilterManager.Instance.IsSoundFiltered(sound.Index))
+            {
+                Log.Warn($"Failed to play sound {sound.Index > 0} {SoundFilterManager.Instance.IsSoundFiltered(sound.Index)} {currentProfile.SoundVolume} {currentProfile.ReproduceSoundsInBackground} {Client.Game.IsActive}");
+                return;
+            }
+
+            float volume = currentProfile.SoundVolume / SOUND_DELTA;
+
+            if (Client.Game.IsActive)
+            {
+                if (!currentProfile.ReproduceSoundsInBackground)
+                {
+                    volume = currentProfile.SoundVolume / SOUND_DELTA;
+                }
+            }
+            else if (!currentProfile.ReproduceSoundsInBackground)
+            {
+                volume = 0;
+            }
+
+            if (volume < -1 || volume > 1f)
+            {
+                return;
+            }
+
+            if (!currentProfile.EnableSound || !Client.Game.IsActive && !currentProfile.ReproduceSoundsInBackground)
+            {
+                volume = 0;
+            }
+
+            try
+            {
+                if (sound.Play(Time.Ticks, volume))
+                {
+                    Log.Trace($"Played sound {sound.Name} {volume}");
+                    // Track UOSound instances for cleanup
+                    if (sound is UOSound uoSound)
+                    {
+                        uoSound.X = -1;
+                        uoSound.Y = -1;
+                        uoSound.CalculateByDistance = false;
+                        _currentSounds.AddLast(uoSound);
+                    }
+                    // Track all playing sounds (including FileSound) for manual stopping
+                    _allPlayingSounds.AddLast(sound);
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to play sound '{sound.Name}': {ex.Message}");
+                _audioDeviceDisconnected = true;
+            }
+        }
+
+        /// <summary>
+        /// Stops a specific playing sound effect.
+        /// </summary>
+        /// <param name="sound">The Sound instance to stop</param>
+        public void StopSound(Sound sound)
+        {
+            if (sound == null)
+            {
+                return;
+            }
+
+            try
+            {
+                sound.Stop();
+
+                // Remove from tracking lists
+                if (sound is UOSound uoSound)
+                {
+                    LinkedListNode<UOSound> node = _currentSounds.First;
+                    while (node != null)
+                    {
+                        LinkedListNode<UOSound> next = node.Next;
+                        if (node.Value == uoSound)
+                        {
+                            _currentSounds.Remove(node);
+                            break;
+                        }
+                        node = next;
+                    }
+                }
+
+                // Remove from all playing sounds list
+                LinkedListNode<Sound> allNode = _allPlayingSounds.First;
+                while (allNode != null)
+                {
+                    LinkedListNode<Sound> next = allNode.Next;
+                    if (allNode.Value == sound)
+                    {
+                        _allPlayingSounds.Remove(allNode);
+                        break;
+                    }
+                    allNode = next;
+                }
+
+                Log.Trace($"Stopped sound: {sound.Name}");
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to stop sound '{sound.Name}': {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Convenience method to load and play a sound from the audioassets directory by filename.
+        /// </summary>
+        /// <param name="fileName">Name of the audio file (e.g., "bow_draw.wav" or "arrow_shot.mp3")</param>
+        /// <param name="skipFilter">Whether to skip sound filtering</param>
+        /// <returns>The Sound instance that was played, or null if playback failed</returns>
+        public Sound PlaySoundFromFile(string fileName, bool skipFilter = false)
+        {
+            Log.Trace($"Playing sound from file: {fileName} {string.IsNullOrEmpty(fileName)} {_canReproduceAudio} {_audioDeviceDisconnected}");
+            if (string.IsNullOrEmpty(fileName) || !_canReproduceAudio || _audioDeviceDisconnected)
+            {
+                Log.Warn($"Failed to play sound from file:  {string.IsNullOrEmpty(fileName)} {_canReproduceAudio} {_audioDeviceDisconnected}");
+                return null;
+            }
+
+            try
+            {
+                // Load sound from file via centralized SoundsLoader
+                IO.Audio.Sound sound = Client.Game.UO.Sounds.GetSoundFromFile(fileName);
+                Log.Trace($"Loaded sound from file: {fileName} {sound == null} {sound?.Name}");
+                if (sound != null)
+                {
+                    Log.Trace($"Playing sound from file: {fileName}");
+                    PlaySound(sound, skipFilter);
+                    return sound;
+                }
+            }
+            catch (Exception ex)
+            {
+                Log.Warn($"Failed to play sound from file '{fileName}': {ex.Message}");
+            }
+            return null;
         }
 
         public void PlaySoundWithDistance(World world, int index, int x, int y)
@@ -455,6 +617,21 @@ namespace ClassicUO.Game.Managers
                 }
 
                 first = next;
+            }
+
+            // Clean up stopped sounds from all playing sounds list
+            LinkedListNode<Sound> allSoundNode = _allPlayingSounds.First;
+            while (allSoundNode != null)
+            {
+                LinkedListNode<Sound> next = allSoundNode.Next;
+
+                // Check if sound is still playing using IsPlaying method
+                if (!allSoundNode.Value.IsPlaying(Time.Ticks))
+                {
+                    _allPlayingSounds.Remove(allSoundNode);
+                }
+
+                allSoundNode = next;
             }
         }
 

@@ -59,17 +59,137 @@ namespace ClassicUO.Game.Managers
             public byte RemainingRepeats { get; set; }
             public bool IsActive { get; set; }
 
+            // Frame-based event system (similar to Unity3D Animation Events)
+            // Key: Frame number, Value: List of callbacks to execute at that frame
+            private Dictionary<int, List<Action>> _frameEvents;
+            private HashSet<int> _triggeredFrames; // Track which frames have already triggered events
+
             public AnimationState()
             {
                 IsActive = true;
                 LastFrameTime = Time.Ticks;
+                _frameEvents = new Dictionary<int, List<Action>>();
+                _triggeredFrames = new HashSet<int>();
             }
 
             public void Reset()
             {
                 IsActive = false;
                 Command = AnimationCommand.Stop;
+                _frameEvents?.Clear();
+                _triggeredFrames?.Clear();
             }
+
+            /// <summary>
+            /// Register a callback to be executed when a specific frame is reached.
+            /// Similar to Unity3D's Animation Events.
+            /// Prevents duplicate callbacks by checking if the same callback is already registered.
+            /// </summary>
+            /// <param name="frame">Frame number at which to trigger the event</param>
+            /// <param name="callback">Action to execute when frame is reached</param>
+            /// <returns>True if callback was added, false if it was already registered</returns>
+            public bool RegisterFrameEvent(int frame, Action callback)
+            {
+                if (callback == null)
+                    return false;
+
+                if (_frameEvents == null)
+                    _frameEvents = new Dictionary<int, List<Action>>();
+
+                if (!_frameEvents.ContainsKey(frame))
+                    _frameEvents[frame] = new List<Action>();
+
+                // Check for duplicate callback (prevent registering the same callback multiple times)
+                if (_frameEvents[frame].Contains(callback))
+                {
+                    Log.Trace($"[AnimationSystem] Duplicate callback detected for frame {frame}, skipping registration");
+                    return false;
+                }
+
+                _frameEvents[frame].Add(callback);
+                return true;
+            }
+
+            /// <summary>
+            /// Unregister a specific callback from a frame event
+            /// </summary>
+            public void UnregisterFrameEvent(int frame, Action callback)
+            {
+                if (_frameEvents == null || !_frameEvents.ContainsKey(frame))
+                    return;
+
+                _frameEvents[frame].Remove(callback);
+                if (_frameEvents[frame].Count == 0)
+                    _frameEvents.Remove(frame);
+            }
+
+            /// <summary>
+            /// Clear all frame events for a specific frame
+            /// </summary>
+            public void ClearFrameEvents(int frame)
+            {
+                _frameEvents?.Remove(frame);
+                _triggeredFrames?.Remove(frame);
+            }
+
+            /// <summary>
+            /// Clear all frame events
+            /// </summary>
+            public void ClearAllFrameEvents()
+            {
+                _frameEvents?.Clear();
+                _triggeredFrames?.Clear();
+            }
+
+            /// <summary>
+            /// Trigger frame events for the current frame (called internally by AnimationSystem)
+            /// </summary>
+            internal void TriggerFrameEvents(int frame)
+            {
+                Log.Trace($"[AnimationSystem] Triggering frame events for frame {frame}");
+                Log.Trace($"[AnimationSystem] Frame events: {_frameEvents?.Count}");
+                foreach (KeyValuePair<int, List<Action>> kvp in _frameEvents)
+                {
+                    foreach (Action callback in kvp.Value)
+                    {
+                        Log.Trace($"[AnimationSystem] Callback: {callback?.Method.Name ?? "null"}");
+                    }
+                }
+                // Only trigger once per frame (prevent retriggering if frame is revisited)
+                if (_triggeredFrames.Contains(frame))
+                {
+                    Log.Trace($"[AnimationSystem] Frame {frame} already triggered");
+                    return;
+                }
+
+                if (_frameEvents == null || !_frameEvents.ContainsKey(frame))
+                {
+                    Log.Trace($"[AnimationSystem] No frame events registered for frame {frame}");
+                    return;
+                }
+
+                Log.Trace($"[AnimationSystem] Adding frame {frame} to triggered frames");
+                _triggeredFrames.Add(frame);
+
+                // Execute all callbacks for this frame
+                foreach (Action callback in _frameEvents[frame])
+                {
+                    try
+                    {
+                        callback?.Invoke();
+                        Log.Trace($"[AnimationSystem] Executed frame event for frame {frame}: {callback.Method.Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Error($"[AnimationSystem] Error executing frame event at frame {frame}: {ex.Message}");
+                    }
+                }
+            }
+
+            /// <summary>
+            /// Reset triggered frames (useful when restarting animation or looping)
+            /// </summary>
+            public void ResetTriggeredFrames() => _triggeredFrames?.Clear();
         }
 
         /// <summary>
@@ -237,6 +357,9 @@ namespace ClassicUO.Game.Managers
             {
                 state.CurrentFrame++;
 
+                // Trigger frame events for the new frame
+                state.TriggerFrameEvents(state.CurrentFrame);
+
                 // Check if we've reached holdFrame (play-then-hold behavior)
                 if (state.HoldFrame != 255 && state.CurrentFrame >= state.HoldFrame)
                 {
@@ -269,6 +392,9 @@ namespace ClassicUO.Game.Managers
             else
             {
                 state.CurrentFrame--;
+
+                // Trigger frame events for the new frame
+                state.TriggerFrameEvents(state.CurrentFrame);
 
                 // Check if we've reached holdFrame (play-then-hold behavior for backward animation)
                 if (state.HoldFrame != 255 && state.CurrentFrame <= state.HoldFrame)
@@ -364,6 +490,9 @@ namespace ClassicUO.Game.Managers
             };
 
             _activeAnimations[mobile.Serial] = state;
+
+            // Trigger frame event for start frame if registered
+            state.TriggerFrameEvents(startFrame);
 
             Log.Trace($"[AnimationSystem] PlayAnimation: Mobile={mobile.Serial}, Action={action}, Start={state.StartFrame}, End={state.EndFrame}, Hold={holdFrame} (255=no hold), Delay={state.Delay}ms, LastFrameTime={state.LastFrameTime}, HadExisting={hadExisting}, TotalActive={_activeAnimations.Count}");
         }
@@ -505,6 +634,61 @@ namespace ClassicUO.Game.Managers
         {
             _activeAnimations.TryGetValue(mobileSerial, out AnimationState state);
             return state;
+        }
+
+        /// <summary>
+        /// Register a frame event callback for a mobile's animation.
+        /// The callback will be executed when the animation reaches the specified frame.
+        /// Similar to Unity3D's Animation Events.
+        /// </summary>
+        /// <param name="mobileSerial">Serial of the mobile</param>
+        /// <param name="frame">Frame number at which to trigger the event</param>
+        /// <param name="callback">Action to execute when frame is reached</param>
+        /// <returns>True if event was registered, false if mobile has no active animation or callback was duplicate</returns>
+        public bool RegisterFrameEvent(uint mobileSerial, int frame, Action callback)
+        {
+            if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
+            {
+                bool registered = state.RegisterFrameEvent(frame, callback);
+                if (registered)
+                {
+                    Log.Trace($"[AnimationSystem] Registered frame event for Mobile={mobileSerial}, Frame={frame}");
+                }
+                else
+                {
+                    Log.Trace($"[AnimationSystem] Duplicate frame event for Mobile={mobileSerial}, Frame={frame}, skipped");
+                }
+                return registered;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Unregister a frame event callback for a mobile's animation
+        /// </summary>
+        public bool UnregisterFrameEvent(uint mobileSerial, int frame, Action callback)
+        {
+            if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
+            {
+                state.UnregisterFrameEvent(frame, callback);
+                Log.Trace($"[AnimationSystem] Unregistered frame event for Mobile={mobileSerial}, Frame={frame}");
+                return true;
+            }
+            return false;
+        }
+
+        /// <summary>
+        /// Clear all frame events for a specific frame of a mobile's animation
+        /// </summary>
+        public bool ClearFrameEvents(uint mobileSerial, int frame)
+        {
+            if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
+            {
+                state.ClearFrameEvents(frame);
+                Log.Trace($"[AnimationSystem] Cleared frame events for Mobile={mobileSerial}, Frame={frame}");
+                return true;
+            }
+            return false;
         }
 
         /// <summary>
