@@ -203,6 +203,9 @@ namespace ClassicUO.Game.Scenes
             WalkableManager.Instance.Initialize();
             ItemDatabaseManager.Instance.Initialize();
 
+            // Initialize Special Combat Operation Manager
+            Combat.SpecialCombatOperationManager.Instance.Initialize(_world);
+
             var viewport = new WorldViewportGump(_world, this);
             UIManager.Add(viewport, false);
 
@@ -432,6 +435,9 @@ namespace ClassicUO.Game.Scenes
             EventSink.InvokeOnDisconnected(null);
 
             _world.TargetManager.Reset();
+
+            // Clear all special combat operations
+            Combat.SpecialCombatOperationManager.Instance.ClearAllOperations();
 
             // special case for wmap. this allow us to save settings
             UIManager.GetGump<WorldMapGump>()?.SaveSettings();
@@ -884,8 +890,11 @@ namespace ClassicUO.Game.Scenes
                 return;
             }
 
-            // Update charged shot input state
-            UpdateChargedShotInput();
+            // Update special combat input state
+            UpdateSpecialCombatInput();
+
+            // Update special combat operations (UI, animations)
+            Combat.SpecialCombatOperationManager.Instance.Update((float)Time.Delta);
 
             if (Time.Ticks > _timePing)
             {

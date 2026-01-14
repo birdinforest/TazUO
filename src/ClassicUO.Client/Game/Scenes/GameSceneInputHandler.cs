@@ -93,91 +93,54 @@ namespace ClassicUO.Game.Scenes
         }
 
         /// <summary>
-        /// Handles charged shot input (left mouse button hold/release)
+        /// Handles mouse input for special combat operations.
+        /// Sends GENERIC input to server - server decides what operation this triggers.
         /// </summary>
-        private void UpdateChargedShotInput()
+        private void UpdateSpecialCombatInput()
         {
             // Only process if player exists and is in game
             if (!_world.InGame || _world.Player == null)
-            {
                 return;
-            }
 
-            // Don't process if UI has focus or is being interacted with
+            // Don't process if UI has focus
             if (!UIManager.IsMouseOverWorld || UIManager.IsDragging)
-            {
                 return;
-            }
 
-            // Don't process if targeting cursor is active
+            // Don't process if targeting cursor active
             if (_world.TargetManager.IsTargeting)
-            {
                 return;
-            }
 
-            // Don't process if a non-chat UI control has keyboard focus (e.g., text input in a gump)
-            // Chat text box focus is normal and shouldn't block mouse input for charged shot
+            // Don't process if non-chat UI has keyboard focus
             if (UIManager.KeyboardFocusControl != null &&
                 UIManager.KeyboardFocusControl != UIManager.SystemChat?.TextBoxControl)
-            {
                 return;
-            }
 
-            PlayerMobile player = _world.Player;
             bool leftMousePressed = _isMouseLeftDown;
 
-            // If war mode was just disabled, cancel charging
-            if (player.IsChargingShot && !player.InWarMode)
-            {
-                Console.WriteLine("UpdateChargedShotInput()---------------------------------");
-                Console.WriteLine("War mode disabled, cancelling charge");
-                AsyncNetClient.Socket.Send_ChargedShotRelease();
-                player.IsChargingShot = false;
-            }
-
-            // Detect left mouse button PRESS (state change from up to down)
+            // Detect left mouse button PRESS
             if (leftMousePressed && !_leftMouseWasPressed)
             {
-                Console.WriteLine("LeftMousePressed");
-                // Button just pressed - try to start charging
-                if (player.CanStartChargedShot())
-                {
-                    player.IsChargingShot = true;
-                    player.ChargeStartTime = DateTime.Now;
+                // Send generic input - server decides what this does
+                AsyncNetClient.Socket.Send_SpecialCombatInput(
+                    ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
+                    ClassicUO.Network.NetClientExt.MouseButton.Left
+                );
 
-                    // Send start packet to server
-                    AsyncNetClient.Socket.Send_ChargedShotStart();
-
-                    Log.Trace("Charged shot: Started charging");
-                    Console.WriteLine("Charged shot: Started charging");
-                    Console.WriteLine("---------------------------------");
-                }
+                Log.Trace("[SpecialCombat] Sent: Left Press");
             }
-            // Detect left mouse button RELEASE (state change from down to up)
+            // Detect left mouse button RELEASE
             else if (!leftMousePressed && _leftMouseWasPressed)
             {
-                // Button just released
-                if (player.IsChargingShot)
-                {
-                    // Send release packet to server
-                    AsyncNetClient.Socket.Send_ChargedShotRelease();
+                // Send generic input - server decides what this does
+                AsyncNetClient.Socket.Send_SpecialCombatInput(
+                    ClassicUO.Network.NetClientExt.SpecialCombatInputType.Release,
+                    ClassicUO.Network.NetClientExt.MouseButton.Left
+                );
 
-                    // Clear local state
-                    player.IsChargingShot = false;
-
-                    TimeSpan held = DateTime.Now - player.ChargeStartTime;
-                    Console.WriteLine("Held: " + held.TotalSeconds);
-                    Log.Trace($"Charged shot: Released after {held.TotalSeconds:F2}s");
-                    Console.WriteLine($"Charged shot: Released after {held.TotalSeconds:F2} seconds");
-                    Console.WriteLine("---------------------------------");
-                    if (held.TotalSeconds >= 3)
-                    {
-                        Console.WriteLine("Charged shot: Released after 3 seconds");
-                    }
-                }
+                Log.Trace("[SpecialCombat] Sent: Left Release");
             }
 
-            // Update previous state for next frame
+            // Update state for next frame
             _leftMouseWasPressed = leftMousePressed;
         }
 

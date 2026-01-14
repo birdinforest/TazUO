@@ -4715,66 +4715,51 @@ namespace ClassicUO.Network
         }
 
         /// <summary>
-        /// Sends charged shot control packet (0xBF subcommand 0x0032)
+        /// Enum for special combat input types
         /// </summary>
-        /// <param name="action">0x01 = Start Charging, 0x02 = Release</param>
-        public static void Send_ChargedShotControl(this AsyncNetClient socket, byte action)
+        public enum SpecialCombatInputType : byte
         {
-            Console.WriteLine($"Send_ChargedShotControl: action=0x{action:X2}, socket.IsConnected={socket?.IsConnected}");
+            Press = 0x01,      // Button pressed
+            Release = 0x02,    // Button released
+            Cancel = 0x03      // Explicit cancel (e.g., ESC key)
+        }
 
+        /// <summary>
+        /// Enum for mouse buttons
+        /// </summary>
+        public enum MouseButton : byte
+        {
+            Left = 0x01,
+            Right = 0x02,
+            Middle = 0x03
+        }
+
+        /// <summary>
+        /// Sends generic special combat input to server.
+        /// Server decides what operation (if any) this triggers based on context.
+        /// Packet 0xBF subcommand 0x0033
+        /// </summary>
+        /// <param name="inputType">Type of input (Press, Release, Cancel)</param>
+        /// <param name="mouseButton">Which mouse button (Left, Right, Middle)</param>
+        public static void Send_SpecialCombatInput(
+            this AsyncNetClient socket,
+            SpecialCombatInputType inputType,
+            MouseButton mouseButton = MouseButton.Left)
+        {
             const byte ID = 0xBF; // Extended command packet
 
-            int length = AsyncNetClient.PacketsTable.GetPacketLength(ID);
-            Console.WriteLine($"Send_ChargedShotControl: packet length={length}");
-
-            var writer = new StackDataWriter(length < 0 ? 64 : length);
-
-            writer.WriteUInt8(ID);
-
-            if (length < 0)
-            {
-                writer.WriteZero(2); // Placeholder for length
-            }
-
-            writer.WriteUInt16BE(0x33); // Subcommand: 0x33 (Charged Shot)
-            writer.WriteUInt8(action);    // Action: 0x01 or 0x02
-
-            if (length < 0)
-            {
-                writer.Seek(1, SeekOrigin.Begin);
-                writer.WriteUInt16BE((ushort)writer.BytesWritten);
-            }
-            else
-            {
-                writer.WriteZero(length - writer.BytesWritten);
-            }
-
-            System.ReadOnlySpan<byte> buffer = writer.BufferWritten;
-            byte[] bufferArray = buffer.ToArray();
-            Console.WriteLine($"Send_ChargedShotControl: About to send packet, length={buffer.Length}, bytes=[{string.Join(" ", bufferArray.Take(Math.Min(10, bufferArray.Length)).Select(b => $"0x{b:X2}"))}]");
+            var writer = new StackDataWriter(8); // Fixed 8-byte packet
+            writer.WriteUInt8(ID);                          // Packet ID: 0xBF
+            writer.WriteUInt16BE(8);                        // Length: 8 bytes
+            writer.WriteUInt16BE(0x0033);                   // Subcommand: 0x0033 (Special Combat Input)
+            writer.WriteUInt8((byte)inputType);             // Input type
+            writer.WriteUInt8((byte)mouseButton);           // Mouse button
+            writer.WriteUInt8(0);                           // Reserved for future use
 
             socket.Send(writer.BufferWritten);
             writer.Dispose();
 
-            Console.WriteLine($"Send_ChargedShotControl: Packet sent");
-        }
-
-        /// <summary>
-        /// Convenience method: Start charging bow
-        /// </summary>
-        public static void Send_ChargedShotStart(this AsyncNetClient socket)
-        {
-            Console.WriteLine("Send_ChargedShotStart-");
-            socket.Send_ChargedShotControl(0x01);
-        }
-
-        /// <summary>
-        /// Convenience method: Release charged shot
-        /// </summary>
-        public static void Send_ChargedShotRelease(this AsyncNetClient socket)
-        {
-            Console.WriteLine("Send_ChargedShotRelease-");
-            socket.Send_ChargedShotControl(0x02);
+            Console.WriteLine($"[SpecialCombat] Sent input: {inputType} {mouseButton}");
         }
     }
 }

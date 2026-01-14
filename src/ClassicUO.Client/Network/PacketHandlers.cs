@@ -4969,6 +4969,27 @@ sealed class PacketHandlers
 
                 break;
 
+            //===========================================================================================
+            //===========================================================================================
+            case 0x0035: // Special Combat Operation State Update
+                {
+                    var state = (Game.Combat.SpecialCombatOperationState)p.ReadUInt8();
+                    byte operationIdLength = p.ReadUInt8();
+                    string operationId = p.ReadASCII(operationIdLength);
+                    ushort metadataLength = p.ReadUInt16BE();
+                    string metadataJson = p.ReadASCII(metadataLength);
+
+                    Log.Trace($"[PacketHandler] Operation update: {operationId} -> {state}");
+
+                    // Delegate to manager
+                    Game.Combat.SpecialCombatOperationManager.Instance.OnServerStateUpdate(
+                        operationId,
+                        state,
+                        metadataJson
+                    );
+                }
+                break;
+
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
 
