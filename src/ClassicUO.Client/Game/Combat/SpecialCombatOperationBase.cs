@@ -10,16 +10,18 @@ namespace ClassicUO.Game.Combat
     /// <summary>
     /// Special combat operation state enum.
     /// Shared between client and server (unified naming).
+    /// CRITICAL: Must match server enum exactly (same order and values)!
     /// </summary>
     public enum SpecialCombatOperationState : byte
     {
         None = 0,        // Not started
         Preparing = 1,   // Initializing (e.g., drawing bow)
-        Active = 2,      // Active and providing bonuses (e.g., fully charged)
-        Completing = 3,  // Finishing (e.g., waiting for attack result)
-        Completed = 4,   // Successfully completed
-        Canceled = 5,    // Canceled by user
-        Interrupted = 6  // Interrupted by external event
+        Ready = 2,       // Ready to perform (e.g., fully charged, ready to fire)
+        Active = 3,      // Active/executing (e.g., firing, striking)
+        Completing = 4,  // Finishing (e.g., waiting for attack result)
+        Completed = 5,   // Successfully completed
+        Canceled = 6,    // Canceled by user
+        Interrupted = 7  // Interrupted by external event
     }
 
     /// <summary>
