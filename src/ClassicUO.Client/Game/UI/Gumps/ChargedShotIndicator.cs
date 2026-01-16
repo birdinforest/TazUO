@@ -94,10 +94,16 @@ namespace ClassicUO.Game.UI.Gumps
                 return false;
 
             // Calculate progress based on charge time
-            TimeSpan elapsed = DateTime.Now - _info.StartTime;
+            // Use ClientUIStartTime for smooth animation (starts at 0%)
+            // Fallback to StartTime if ClientUIStartTime not set
+            DateTime startTime = _info.ClientUIStartTime != DateTime.MinValue
+                ? _info.ClientUIStartTime
+                : _info.StartTime;
+
+            TimeSpan elapsed = DateTime.Now - startTime;
             float progress = Math.Min((float)elapsed.TotalSeconds / _info.ChargeTime, 1.0f);
 
-            // Use server's fullyCharged flag if available
+            // Use server's fullyCharged flag for final state
             if (_info.FullyCharged)
                 progress = 1.0f;
 

@@ -17,9 +17,14 @@ namespace ClassicUO.Game.Combat
         public float ChargeTime { get; set; } = 3.0f;
         public bool FullyCharged { get; set; } = false;
 
+        // Client-side UI start time (for smooth progress bar animation starting from 0%)
+        // StartTime (from base class) is the server's authoritative time
+        public DateTime ClientUIStartTime { get; set; } = DateTime.MinValue;
+
         public override void UpdateFromServer(SpecialCombatOperationState state, string metadataJson)
         {
             base.UpdateFromServer(state, metadataJson);
+
 
             // Parse charged shot specific metadata
             if (Metadata != null)
@@ -28,11 +33,53 @@ namespace ClassicUO.Game.Combat
                 {
                     try
                     {
-                        ChargeTime = Convert.ToSingle(chargeTime);
+                        // Handle different types from JSON deserialization
+                        if (chargeTime is System.Text.Json.JsonElement jsonElement)
+                        {
+                            ChargeTime = jsonElement.GetSingle();
+                        }
+                        else
+                        {
+                            ChargeTime = Convert.ToSingle(chargeTime);
+                        }
+                        Log.Trace($"[ChargedShotOperation] Charge time parsed: {ChargeTime}s");
                     }
-                    catch
+                    catch (Exception ex)
                     {
-                        ChargeTime = 3.0f;
+                        ChargeTime = 1.0f; // Default to 1 second (matching config default)
+                        Log.Warn($"[ChargedShotOperation] Failed to parse chargeTime: {ex.Message}, using fallback: {ChargeTime}s");
+                    }
+                }
+
+                // Use server's startTime if provided for precise synchronization
+                if (Metadata.TryGetValue("startTime", out object startTimeObj))
+                {
+                    try
+                    {
+                        long startTimeBinary;
+
+                        // Handle different types from JSON deserialization
+                        if (startTimeObj is System.Text.Json.JsonElement jsonElement)
+                        {
+                            startTimeBinary = jsonElement.GetInt64();
+                        }
+                        else if (startTimeObj is long longValue)
+                        {
+                            startTimeBinary = longValue;
+                        }
+                        else
+                        {
+                            startTimeBinary = Convert.ToInt64(startTimeObj);
+                        }
+
+                        StartTime = DateTime.FromBinary(startTimeBinary);
+                        Log.Trace($"[ChargedShotOperation] Start time parsed: {StartTime} (binary: {startTimeBinary})");
+                    }
+                    catch (Exception ex)
+                    {
+                        // Fall back to current time if parsing fails
+                        StartTime = DateTime.Now;
+                        Log.Warn($"[ChargedShotOperation] Failed to parse startTime: {ex.Message}, using DateTime.Now");
                     }
                 }
 
@@ -40,11 +87,23 @@ namespace ClassicUO.Game.Combat
                 {
                     try
                     {
-                        FullyCharged = Convert.ToBoolean(fullyCharged);
+                        // Handle different types from JSON deserialization
+                        if (fullyCharged is System.Text.Json.JsonElement jsonElement)
+                        {
+                            FullyCharged = jsonElement.GetBoolean();
+                        }
+                        else
+                        {
+                            FullyCharged = Convert.ToBoolean(fullyCharged);
+                        }
+
+                        TimeSpan elapsed = DateTime.Now - StartTime;
+                        Log.Trace($"[ChargedShotOperation] Fully charged: {FullyCharged}, elapsed: {elapsed.TotalSeconds:F3}s (start: {StartTime:HH:mm:ss.fff})");
                     }
-                    catch
+                    catch (Exception ex)
                     {
                         FullyCharged = false;
+                        Log.Warn($"[ChargedShotOperation] Failed to parse fullyCharged: {ex.Message}");
                     }
                 }
             }
@@ -102,16 +161,33 @@ namespace ClassicUO.Game.Combat
                     // Clear any old frame events from previous operation cycle
                     // This is critical when transitioning from Active/Canceled -> Preparing (rapid re-attack)
                     ClearAllFrameEvents();
-                    // Server confirmed charge started - show UI
-                    _info.StartTime = DateTime.Now;
+
+                    // Set client-side UI start time for smooth progress bar (always starts at 0%)
+                    // This is separate from server's StartTime which is used for synchronization
+                    _info.ClientUIStartTime = DateTime.Now;
+
+                    // Fallback: Set server StartTime if not provided in metadata
+                    if (_info.StartTime == DateTime.MinValue || _info.StartTime == default(DateTime))
+                    {
+                        _info.StartTime = DateTime.Now;
+                        Log.Warn("[ChargedShotOperation] Server did not provide startTime, using client fallback");
+                    }
+
                     ShowUI();
                     // Register frame events for draw animation
                     RegisterDrawAnimationEvents();
                     break;
 
+                case SpecialCombatOperationState.Ready:
+                    // Fully charged - ready to fire
+                    // UI continues to show (progress at 100%)
+                    // Server is waiting for release input
+                    Log.Trace("[ChargedShotOperation] Bow fully charged and ready to fire");
+                    break;
+
                 case SpecialCombatOperationState.Active:
-                    // Fully charged - ready sound will play at hold frame via frame event
-                    // No immediate sound here - wait for animation frame
+                    // Actually firing (after release with target)
+                    Log.Trace("[ChargedShotOperation] Firing charged shot");
                     break;
 
                 case SpecialCombatOperationState.Completing:
@@ -140,11 +216,12 @@ namespace ClassicUO.Game.Combat
             // Check if player is playing action 27 (bow draw) animation and register events immediately
             if (_world?.Player != null)
             {
-                var animState = AnimationSystem.Instance.GetState(_world.Player.Serial);
+                AnimationSystem.AnimationState animState = AnimationSystem.Instance.GetState(_world.Player.Serial);
                 if (animState != null && animState.Action == 27 && animState.IsActive)
                 {
                     // Animation is playing - ensure events are registered
                     if (CurrentState == SpecialCombatOperationState.Preparing ||
+                        CurrentState == SpecialCombatOperationState.Ready ||
                         CurrentState == SpecialCombatOperationState.None)
                     {
                         // Register draw events if not already registered
@@ -169,7 +246,8 @@ namespace ClassicUO.Game.Combat
 
             // Fallback: Ensure frame events are registered based on state
             // (This handles cases where state update arrives before animation)
-            if (CurrentState == SpecialCombatOperationState.Preparing)
+            if (CurrentState == SpecialCombatOperationState.Preparing ||
+                CurrentState == SpecialCombatOperationState.Ready)
             {
                 RegisterDrawAnimationEvents();
             }
@@ -305,7 +383,6 @@ namespace ClassicUO.Game.Combat
                 try
                 {
                     Client.Game.Audio.StopSound(_drawSound);
-                    Log.Trace("[ChargedShotOperation] Draw sound stopped");
                 }
                 catch (Exception ex)
                 {
