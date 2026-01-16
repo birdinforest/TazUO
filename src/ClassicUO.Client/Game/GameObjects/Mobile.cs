@@ -381,12 +381,12 @@ namespace ClassicUO.Game.GameObjects
             _animationGroup = 0xFF; // Unset animation group
             AnimationFromServer = false; // Clear server animation flag
             LastAnimationChangeTime = Time.Ticks - 1000; // Force immediate recalculation
-            Log.Trace($"[Mobile.ResetAnimationGroup] Mobile={Serial}, Name={Name}, _animationGroup reset to 0xFF, AnimationFromServer=false");
+            // Log.Trace($"[Mobile.ResetAnimationGroup] Mobile={Serial}, Name={Name}, _animationGroup reset to 0xFF, AnimationFromServer=false");
         }
 
         public void SetIdleAnimation()
         {
-            Log.Trace($"[Mobile.SetIdleAnimation] Mobile={Serial}, Name={Name}, IsMounted={IsMounted}, InWarMode={InWarMode}, ExecuteAnimation={ExecuteAnimation}, AnimGroup={_animationGroup}, AnimFromServer={AnimationFromServer}");
+            // Log.Trace($"[Mobile.SetIdleAnimation] Mobile={Serial}, Name={Name}, IsMounted={IsMounted}, InWarMode={InWarMode}, ExecuteAnimation={ExecuteAnimation}, AnimGroup={_animationGroup}, AnimFromServer={AnimationFromServer}");
 
             CalculateRandomIdleTime();
 

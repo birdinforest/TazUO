@@ -102,7 +102,7 @@ namespace ClassicUO.Game.Managers
                 // Check for duplicate callback (prevent registering the same callback multiple times)
                 if (_frameEvents[frame].Contains(callback))
                 {
-                    Log.Trace($"[AnimationSystem] Duplicate callback detected for frame {frame}, skipping registration");
+                    // Log.Trace($"[AnimationSystem] Duplicate callback detected for frame {frame}, skipping registration");
                     return false;
                 }
 
@@ -146,29 +146,30 @@ namespace ClassicUO.Game.Managers
             /// </summary>
             internal void TriggerFrameEvents(int frame)
             {
-                Log.Trace($"[AnimationSystem] Triggering frame events for frame {frame}");
-                Log.Trace($"[AnimationSystem] Frame events: {_frameEvents?.Count}");
-                foreach (KeyValuePair<int, List<Action>> kvp in _frameEvents)
-                {
-                    foreach (Action callback in kvp.Value)
-                    {
-                        Log.Trace($"[AnimationSystem] Callback: {callback?.Method.Name ?? "null"}");
-                    }
-                }
+                // Log.Trace($"[AnimationSystem] Triggering frame events for frame {frame}");
+                // Log.Trace($"[AnimationSystem] Frame events: {_frameEvents?.Count}");
+                // foreach (KeyValuePair<int, List<Action>> kvp in _frameEvents)
+                // {
+                // foreach (Action callback in kvp.Value)
+                // {
+                //     Log.Trace($"[AnimationSystem] Callback: {callback?.Method.Name ?? "null"}");
+                // }
+                // }
+
                 // Only trigger once per frame (prevent retriggering if frame is revisited)
                 if (_triggeredFrames.Contains(frame))
                 {
-                    Log.Trace($"[AnimationSystem] Frame {frame} already triggered");
+                    Log.Warn($"[AnimationSystem] Frame {frame} already triggered");
                     return;
                 }
 
                 if (_frameEvents == null || !_frameEvents.ContainsKey(frame))
                 {
-                    Log.Trace($"[AnimationSystem] No frame events registered for frame {frame}");
+                    // Log.Warn($"[AnimationSystem] No frame events registered for frame {frame}");
                     return;
                 }
 
-                Log.Trace($"[AnimationSystem] Adding frame {frame} to triggered frames");
+                // Log.Trace($"[AnimationSystem] Adding frame {frame} to triggered frames");
                 _triggeredFrames.Add(frame);
 
                 // Execute all callbacks for this frame
@@ -177,7 +178,7 @@ namespace ClassicUO.Game.Managers
                     try
                     {
                         callback?.Invoke();
-                        Log.Trace($"[AnimationSystem] Executed frame event for frame {frame}: {callback.Method.Name}");
+                        // Log.Trace($"[AnimationSystem] Executed frame event for frame {frame}: {callback.Method.Name}");
                     }
                     catch (Exception ex)
                     {
@@ -318,10 +319,10 @@ namespace ClassicUO.Game.Managers
 
             state.LastFrameTime = currentTime;
 
-            if(mobile.Name == "BirdinForest")
-            {
-                Console.WriteLine($"AnimationSystem.UpdateAnimationState: Mobile={mobile.Serial}, Action={state.Action}, Command={state.Command}, StartFrame={state.StartFrame}, EndFrame={state.EndFrame}, Forward={state.Forward}, Delay={state.Delay}, RepeatCount={state.RepeatCount}, CurrentFrame={state.CurrentFrame}, RemainingRepeats={state.RemainingRepeats}, IsActive={state.IsActive}");
-            }
+            // if(mobile.Name == "BirdinForest")
+            // {
+            //     Console.WriteLine($"AnimationSystem.UpdateAnimationState: Mobile={mobile.Serial}, Action={state.Action}, Command={state.Command}, StartFrame={state.StartFrame}, EndFrame={state.EndFrame}, Forward={state.Forward}, Delay={state.Delay}, RepeatCount={state.RepeatCount}, CurrentFrame={state.CurrentFrame}, RemainingRepeats={state.RemainingRepeats}, IsActive={state.IsActive}");
+            // }
 
             switch (state.Command)
             {
@@ -367,14 +368,14 @@ namespace ClassicUO.Game.Managers
                     mobile.AnimIndex = state.HoldFrame;
                     state.CurrentFrame = state.HoldFrame;
                     state.Command = AnimationCommand.Hold;  // Switch to Hold mode
-                    Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Reached hold frame {state.HoldFrame} for Mobile={mobile.Serial}, switching to Hold mode");
+                    // Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Reached hold frame {state.HoldFrame} for Mobile={mobile.Serial}, switching to Hold mode");
                     return;
                 }
 
                 if (state.CurrentFrame > targetFrame)
                 {
                     // Animation complete - re-enable legacy system
-                    Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Animation complete for Mobile={mobile.Serial}, Action={state.Action}, reached frame {state.CurrentFrame} (target was {targetFrame})");
+                    // Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Animation complete for Mobile={mobile.Serial}, Action={state.Action}, reached frame {state.CurrentFrame} (target was {targetFrame})");
                     byte finalFrame = (byte)targetFrame;
                     mobile.AnimIndex = finalFrame; // Ensure AnimIndex is set to final frame before stopping
                     state.Reset();
@@ -385,7 +386,7 @@ namespace ClassicUO.Game.Managers
                     mobile.ResetAnimationGroup(); // Reset animation group to 0xFF (unset)
 
                     _activeAnimations.Remove(mobile.Serial);  // Clean up state
-                    Log.Trace($"[AnimationSystem] UpdatePlayAnimation: After completion - ExecuteAnimation={mobile.ExecuteAnimation}, ResetAnimationGroup called, legacy system re-enabled");
+                    // Log.Trace($"[AnimationSystem] UpdatePlayAnimation: After completion - ExecuteAnimation={mobile.ExecuteAnimation}, ResetAnimationGroup called, legacy system re-enabled");
                     return;
                 }
             }
@@ -403,14 +404,14 @@ namespace ClassicUO.Game.Managers
                     mobile.AnimIndex = state.HoldFrame;
                     state.CurrentFrame = state.HoldFrame;
                     state.Command = AnimationCommand.Hold;  // Switch to Hold mode
-                    Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Reached hold frame {state.HoldFrame} for Mobile={mobile.Serial} (backward), switching to Hold mode");
+                    // Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Reached hold frame {state.HoldFrame} for Mobile={mobile.Serial} (backward), switching to Hold mode");
                     return;
                 }
 
                 if (state.CurrentFrame < targetFrame)
                 {
                     // Animation complete - re-enable legacy system
-                    Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Animation complete for Mobile={mobile.Serial}, reached frame {state.CurrentFrame} (target was {targetFrame})");
+                    // Log.Trace($"[AnimationSystem] UpdatePlayAnimation: Animation complete for Mobile={mobile.Serial}, reached frame {state.CurrentFrame} (target was {targetFrame})");
                     state.Reset();
 
                     // Reset animation group to force recalculation
@@ -424,10 +425,10 @@ namespace ClassicUO.Game.Managers
 
             mobile.AnimIndex = state.CurrentFrame;
 
-            if(mobile.Name == "BirdinForest")
-            {
-                Console.WriteLine($"AnimationSystem.UpdatePlayAnimation: state.CurrentFrame={state.CurrentFrame} targetFrame={targetFrame} mobile.animIndex={mobile.AnimIndex}");
-            }
+            // if(mobile.Name == "BirdinForest")
+            // {
+            //     Console.WriteLine($"AnimationSystem.UpdatePlayAnimation: state.CurrentFrame={state.CurrentFrame} targetFrame={targetFrame} mobile.animIndex={mobile.AnimIndex}");
+            // }
         }
 
         /// <summary>
@@ -459,11 +460,6 @@ namespace ClassicUO.Game.Managers
         private void PlayAnimation(Mobile mobile, ushort action, byte startFrame, byte endFrame, bool forward, byte delay, byte holdFrame = 255)
         {
             // Remove any existing animation state
-            bool hadExisting = _activeAnimations.ContainsKey(mobile.Serial);
-            if (hadExisting)
-            {
-                Log.Trace($"[AnimationSystem] PlayAnimation: Stopping existing animation for Mobile={mobile.Serial} before starting new one");
-            }
             StopAnimation(mobile);
 
             // Set animation
@@ -494,7 +490,7 @@ namespace ClassicUO.Game.Managers
             // Trigger frame event for start frame if registered
             state.TriggerFrameEvents(startFrame);
 
-            Log.Trace($"[AnimationSystem] PlayAnimation: Mobile={mobile.Serial}, Action={action}, Start={state.StartFrame}, End={state.EndFrame}, Hold={holdFrame} (255=no hold), Delay={state.Delay}ms, LastFrameTime={state.LastFrameTime}, HadExisting={hadExisting}, TotalActive={_activeAnimations.Count}");
+            // Log.Trace($"[AnimationSystem] PlayAnimation: Mobile={mobile.Serial}, Action={action}, Start={state.StartFrame}, End={state.EndFrame}, Hold={holdFrame} (255=no hold), Delay={state.Delay}ms, LastFrameTime={state.LastFrameTime}, HadExisting={hadExisting}, TotalActive={_activeAnimations.Count}");
         }
 
         /// <summary>
@@ -530,7 +526,7 @@ namespace ClassicUO.Game.Managers
 
             _activeAnimations[mobile.Serial] = state;
 
-            Log.Trace($"[AnimationSystem] Hold frame: Mobile={mobile.Serial}, Action={action}, Frame={holdFrame}");
+            // Log.Trace($"[AnimationSystem] Hold frame: Mobile={mobile.Serial}, Action={action}, Frame={holdFrame}");
         }
 
         /// <summary>
@@ -567,7 +563,7 @@ namespace ClassicUO.Game.Managers
 
             _activeAnimations[mobile.Serial] = state;
 
-            Log.Trace($"[AnimationSystem] Continue animation: Mobile={mobile.Serial}, Action={action}, From={currentFrame}, End={endFrame}");
+            // Log.Trace($"[AnimationSystem] Continue animation: Mobile={mobile.Serial}, Action={action}, From={currentFrame}, End={endFrame}");
         }
 
         /// <summary>
@@ -584,7 +580,7 @@ namespace ClassicUO.Game.Managers
                 mobile.ExecuteAnimation = true;  // Re-enable legacy animation system
                 mobile.ResetAnimationGroup(); // Reset animation group to 0xFF (unset)
 
-                Log.Trace($"[AnimationSystem] Stop animation: Mobile={mobile.Serial}, ResetAnimationGroup called, legacy system re-enabled");
+                // Log.Trace($"[AnimationSystem] Stop animation: Mobile={mobile.Serial}, ResetAnimationGroup called, legacy system re-enabled");
             }
         }
 
@@ -595,8 +591,8 @@ namespace ClassicUO.Game.Managers
         {
             if (frame == 255)
             {
-                Log.Warn($"[AnimationSystem] Invalid repeat frame: 255");
-                return;
+                Log.Warn($"[AnimationSystem] Invalid repeat frame: 255. Fallback to 245.");
+                frame = 245;
             }
 
             // Remove any existing animation state
@@ -624,7 +620,7 @@ namespace ClassicUO.Game.Managers
 
             _activeAnimations[mobile.Serial] = state;
 
-            Log.Trace($"[AnimationSystem] Repeat frame: Mobile={mobile.Serial}, Action={action}, Frame={frame}, Count={repeatCount}");
+            // Log.Trace($"[AnimationSystem] Repeat frame: Mobile={mobile.Serial}, Action={action}, Frame={frame}, Count={repeatCount}");
         }
 
         /// <summary>
@@ -650,13 +646,9 @@ namespace ClassicUO.Game.Managers
             if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
             {
                 bool registered = state.RegisterFrameEvent(frame, callback);
-                if (registered)
+                if (!registered)
                 {
-                    Log.Trace($"[AnimationSystem] Registered frame event for Mobile={mobileSerial}, Frame={frame}");
-                }
-                else
-                {
-                    Log.Trace($"[AnimationSystem] Duplicate frame event for Mobile={mobileSerial}, Frame={frame}, skipped");
+                    Log.Warn($"[AnimationSystem] Duplicate frame event for Mobile={mobileSerial}, Frame={frame}, skipped");
                 }
                 return registered;
             }
@@ -671,7 +663,7 @@ namespace ClassicUO.Game.Managers
             if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
             {
                 state.UnregisterFrameEvent(frame, callback);
-                Log.Trace($"[AnimationSystem] Unregistered frame event for Mobile={mobileSerial}, Frame={frame}");
+                // Log.Trace($"[AnimationSystem] Unregistered frame event for Mobile={mobileSerial}, Frame={frame}");
                 return true;
             }
             return false;
@@ -685,7 +677,7 @@ namespace ClassicUO.Game.Managers
             if (_activeAnimations.TryGetValue(mobileSerial, out AnimationState state))
             {
                 state.ClearFrameEvents(frame);
-                Log.Trace($"[AnimationSystem] Cleared frame events for Mobile={mobileSerial}, Frame={frame}");
+                // Log.Trace($"[AnimationSystem] Cleared frame events for Mobile={mobileSerial}, Frame={frame}");
                 return true;
             }
             return false;

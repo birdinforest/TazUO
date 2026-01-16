@@ -73,24 +73,24 @@ namespace ClassicUO.Renderer.Sounds
         /// <returns>The Sound instance if found, null otherwise</returns>
         public IO.Audio.Sound GetSoundFromFile(string fileName)
         {
-            Console.WriteLine($"Getting sound from file: {fileName} {string.IsNullOrEmpty(fileName)}");
+            // Console.WriteLine($"[Sound] Getting sound from file: {fileName} {string.IsNullOrEmpty(fileName)}");
             if (string.IsNullOrEmpty(fileName))
             {
-                Console.WriteLine($"Returning null for empty file name");
+                Console.WriteLine($"[Warning][Sound] Returning null for empty file name");
                 return null;
             }
 
             // Check cache first (case-insensitive)
             if (_soundsFromFile.TryGetValue(fileName, out IO.Audio.Sound cachedSound))
             {
-                Console.WriteLine($"Returning cached sound: {cachedSound?.Name}");
+                // Console.WriteLine($"[Sound] Returning cached sound: {cachedSound?.Name}");
                 return cachedSound;
             }
 
             // Try to load from SoundsLoader
             if (_soundsLoader.TryGetSoundFromFile(fileName, out IO.Audio.Sound sound))
             {
-                Console.WriteLine($"Loaded sound from file: {fileName} {sound?.Name}");
+                // Console.WriteLine($"[Sound] Loaded sound from file: {fileName} {sound?.Name}");
                 // Cache the loaded sound
                 _soundsFromFile[fileName] = sound;
                 return sound;

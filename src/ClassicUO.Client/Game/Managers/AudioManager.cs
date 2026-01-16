@@ -275,8 +275,6 @@ namespace ClassicUO.Game.Managers
                     }
                     allNode = next;
                 }
-
-                Log.Trace($"Stopped sound: {sound.Name}");
             }
             catch (Exception ex)
             {
@@ -292,7 +290,6 @@ namespace ClassicUO.Game.Managers
         /// <returns>The Sound instance that was played, or null if playback failed</returns>
         public Sound PlaySoundFromFile(string fileName, bool skipFilter = false)
         {
-            Log.Trace($"Playing sound from file: {fileName} {string.IsNullOrEmpty(fileName)} {_canReproduceAudio} {_audioDeviceDisconnected}");
             if (string.IsNullOrEmpty(fileName) || !_canReproduceAudio || _audioDeviceDisconnected)
             {
                 Log.Warn($"Failed to play sound from file:  {string.IsNullOrEmpty(fileName)} {_canReproduceAudio} {_audioDeviceDisconnected}");
@@ -303,10 +300,8 @@ namespace ClassicUO.Game.Managers
             {
                 // Load sound from file via centralized SoundsLoader
                 IO.Audio.Sound sound = Client.Game.UO.Sounds.GetSoundFromFile(fileName);
-                Log.Trace($"Loaded sound from file: {fileName} {sound == null} {sound?.Name}");
                 if (sound != null)
                 {
-                    Log.Trace($"Playing sound from file: {fileName}");
                     PlaySound(sound, skipFilter);
                     return sound;
                 }

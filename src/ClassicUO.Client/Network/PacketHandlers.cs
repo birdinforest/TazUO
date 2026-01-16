@@ -5018,7 +5018,7 @@ sealed class PacketHandlers
 
         // Debug logging
         // Note: holdFrame=255 is normal for Play/Continue/Stop commands (means "no hold frame")
-        Log.Trace($"[HandleAdvancedAnimation] Received: serial={mobileSerial}, action={action}, command={command}, start={startFrame}, end={endFrame}, hold={holdFrame} (255=no hold), forward={forward}, delay={delay}, repeat={repeatCount}");
+        // Log.Trace($"[HandleAdvancedAnimation] Received: serial={mobileSerial}, action={action}, command={command}, start={startFrame}, end={endFrame}, hold={holdFrame} (255=no hold), forward={forward}, delay={delay}, repeat={repeatCount}");
 
         // Process through AnimationSystem
         AnimationSystem.Instance.ProcessAdvancedAnimation(

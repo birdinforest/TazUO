@@ -334,21 +334,21 @@ namespace ClassicUO.Assets
                 $"{assemblyName}.audioassets/{fileName}"
             };
 
-            Console.WriteLine($"Trying to load sound from embedded resources: {string.Join(", ", resourcePaths)}");
+            // Console.WriteLine($"Trying to load sound from embedded resources: {string.Join(", ", resourcePaths)}");
 
             foreach (string resourcePath in resourcePaths)
             {
                 try
                 {
                     Stream embeddedStream = assembly.GetManifestResourceStream(resourcePath);
-                    Console.WriteLine($"Loaded embedded resource: {fileName} {embeddedStream == null}");
+                    // Console.WriteLine($"Loaded embedded resource: {fileName} {embeddedStream == null}");
                     if (embeddedStream != null)
                     {
-                        Console.WriteLine($"Loaded embedded resource: {fileName}");
+                        // Console.WriteLine($"Loaded embedded resource: {fileName}");
                         sound = LoadSoundFromEmbeddedResource(embeddedStream, fileName);
                         if (sound != null)
                         {
-                            Log.Trace($"[SoundsLoader] Loaded sound from embedded resource: {fileName}");
+                            // Log.Trace($"[SoundsLoader] Loaded sound from embedded resource: {fileName}");
                             return true;
                         }
                     }
