@@ -144,10 +144,28 @@ namespace ClassicUO.Game.Scenes
 
                 // Get character position with offset (matching server calculation)
                 (int xOffset, int zOffset) = GetCharacterOffset();
+
+                // Calculate visual center Z offset in world space
+                // The direction was calculated from the sprite's visual center (charScreenY)
+                // which includes FrameInfo.Height / 2 pixel offset above the tile base on screen
+                // We need to match this in world space for the debug line start position
+                //
+                // In isometric projection: screenY = ... - worldZ * 4
+                // If we increase worldZ, screenY decreases (moves UP on screen)
+                // Sprite center is above tile base, so it has SMALLER screenY value
+                // To move screenY up by spriteHeightOffset pixels, we increase worldZ by spriteHeightOffset / 4
+                int spriteHeightOffset = _world.Player.FrameInfo.Height / 2;
+                int visualCenterZOffset = spriteHeightOffset / 4;  // Positive: move up in world Z
+
                 var characterPosition = new Point3D(
                     _world.Player.X + xOffset,
                     _world.Player.Y,
-                    _world.Player.Z + zOffset);
+                    _world.Player.Z + zOffset + visualCenterZOffset);  // Include visual center offset
+
+                Log.Trace($"[SpecialCombat] Debug line start: Player base=({_world.Player.X},{_world.Player.Y},{_world.Player.Z}), " +
+                         $"offset=({xOffset},{zOffset}), sprite offset=({spriteHeightOffset},{visualCenterZOffset}), " +
+                         $"final=({characterPosition.X},{characterPosition.Y},{characterPosition.Z})");
+                Log.Trace($"[SpecialCombat] Debug line end: direction point=({directionPoint.X},{directionPoint.Y},{directionPoint.Z})");
 
                 // Add client-calculated debug line for comparison (independent from server)
                 // This should now match the server's yellow/cyan lines
@@ -227,33 +245,80 @@ namespace ClassicUO.Game.Scenes
             // Isometric formulas (UO uses 22 pixels per tile):
             //   screenX = (worldX - worldY) * 22
             //   screenY = (worldX + worldY) * 22 - worldZ * 4
-            // Inverse (for direction, not absolute position):
-            //   worldDirX = (screenDX + screenDY) / 44
-            //   worldDirY = (screenDY - screenDX) / 44
-            //   worldDirZ = 0 (horizontal aiming - can be extended for vertical)
+            //
+            // For inverse transform (screen delta → world direction):
+            //   screenDeltaX = (worldDirX - worldDirY) * 22
+            //   screenDeltaY = (worldDirX + worldDirY) * 22 - worldDirZ * 4
+            //
+            // Solving for world direction:
+            //   1. First, calculate X/Y assuming horizontal aiming (worldDirZ = 0)
+            //   2. Then extract Z component from remaining screen Y delta
+            //   3. Project end point Z to reflect screen ray's vertical component
 
+            // Step 1: Calculate horizontal direction (X/Y) for projectile movement
+            // These are the normalized direction components for horizontal movement
+            // For horizontal aiming (Z=0 in direction vector), we use the standard isometric inverse:
             double worldDirX = (screenDeltaX + screenDeltaY) / 44.0;
             double worldDirY = (screenDeltaY - screenDeltaX) / 44.0;
-            double worldDirZ = 0; // Horizontal plane (UO convention)
 
-            // 5. Normalize and project to a fixed distance (100 tiles)
-            // This creates a "direction point" that the server can use to calculate direction vector
-            double length = Math.Sqrt(worldDirX * worldDirX + worldDirY * worldDirY);
-            if (length < 0.001) // Avoid division by zero
+            // For projectile movement, we keep direction vector Z = 0 (horizontal aiming)
+            // But we'll adjust the end point's Z to reflect screen ray projection
+            double horizontalLength = Math.Sqrt(worldDirX * worldDirX + worldDirY * worldDirY);
+            if (horizontalLength < 0.001) // Avoid division by zero
             {
                 // Default to facing east if cursor is directly on character
                 worldDirX = 1.0;
                 worldDirY = 0.0;
-                length = 1.0;
+                horizontalLength = 1.0;
             }
 
             // 5. Project to a fixed distance (100 tiles) to create a "direction point"
-            // IMPORTANT: Direction point should NOT include offset - it represents pure direction from screen ray cast
-            // The offset is only used for the starting position of the projectile/debug line, not the direction
+            // IMPORTANT: Direction point should NOT include character offset - it represents pure direction from screen ray cast
+            // The character offset is only used for the starting position of the projectile/debug line, not the direction
             const double PROJECTION_DISTANCE = 100.0; // Fixed distance for direction point
-            int projectedX = _world.Player.X + (int)(worldDirX / length * PROJECTION_DISTANCE);
-            int projectedY = _world.Player.Y + (int)(worldDirY / length * PROJECTION_DISTANCE);
-            int projectedZ = _world.Player.Z; // Pure direction, no offset
+
+            // Step 2: Calculate end point world X, Y from horizontal direction
+            int projectedX = _world.Player.X + (int)(worldDirX / horizontalLength * PROJECTION_DISTANCE);
+            int projectedY = _world.Player.Y + (int)(worldDirY / horizontalLength * PROJECTION_DISTANCE);
+
+            // Step 3: Calculate end point Z using reverse projection constraint
+            // Goal: Find the Z value that makes the end point render at cursorScreenY on screen
+            //
+            // The isometric rendering formula is:
+            //   screenY = (worldX + worldY) * 22 - worldZ * 4 - cameraOffsetY - 22
+            //
+            // We solve for projectedZ such that the end point's rendered screenY equals cursorScreenY
+            //
+            // Approach:
+            //   1. Calculate cameraOffsetY from player's known rendering position
+            //   2. Calculate where the end point would appear if Z = Player.Z
+            //   3. Calculate the difference from cursor's target position
+            //   4. Solve for Z change needed (screenY changes by -4 per +1 Z)
+
+            // 1. Calculate camera offset by working backwards from Player's RealScreenPosition
+            // RealScreenPosition.Y = ((Player.X + Player.Y) * 22 - (Player.Z << 2)) - cameraOffset.Y - 22
+            // Rearranging: cameraOffset.Y = ((Player.X + Player.Y) * 22 - (Player.Z << 2)) - RealScreenPosition.Y - 22
+            int cameraOffsetY = ((_world.Player.X + _world.Player.Y) * 22 - (_world.Player.Z << 2))
+                              - _world.Player.RealScreenPosition.Y - 22;
+
+            // 2. Calculate what the end point's screenY would be if Z = Player.Z
+            // Using the isometric rendering formula with our projected X, Y and Player's Z
+            int endPointScreenY_atPlayerZ = ((projectedX + projectedY) * 22 - (_world.Player.Z << 2))
+                                          - cameraOffsetY - 22;
+
+            // 3. Calculate the difference from cursor's screen Y
+            // Positive difference means cursor is below the projected point (need to decrease Z)
+            // Negative difference means cursor is above the projected point (need to increase Z)
+            int screenY_difference = cursorScreenY - endPointScreenY_atPlayerZ;
+
+            // 4. Calculate Z change needed
+            // The isometric formula shows: screenY = ... - worldZ * 4
+            // So screenY changes by -4 for each +1 Z change
+            // Therefore: if we need screenY to increase (positive diff), Z must decrease
+            //            if we need screenY to decrease (negative diff), Z must increase
+            // Z_change = -screenY_difference / 4
+            double projectedZChange = -screenY_difference / 4.0;
+            int projectedZ = _world.Player.Z + (int)projectedZChange;
 
             // Log for debugging (throttled to reduce spam)
             if (Time.Ticks % 1000 < 50) // Log roughly once per second
@@ -262,8 +327,11 @@ namespace ClassicUO.Game.Scenes
                 Log.Trace($"  Character screen: ({charScreenX}, {charScreenY})");
                 Log.Trace($"  Cursor screen: ({cursorScreenX}, {cursorScreenY})");
                 Log.Trace($"  Screen delta: ({screenDeltaX}, {screenDeltaY})");
-                Log.Trace($"  World direction (normalized): ({worldDirX / length:F3}, {worldDirY / length:F3}, {worldDirZ / length:F3})");
-                Log.Trace($"  Direction point (NO offset): ({projectedX}, {projectedY}, {projectedZ})");
+                Log.Trace($"  World direction XY (normalized): ({worldDirX / horizontalLength:F3}, {worldDirY / horizontalLength:F3})");
+                Log.Trace($"  Camera offset Y: {cameraOffsetY}");
+                Log.Trace($"  End point screenY at Player.Z: {endPointScreenY_atPlayerZ}, Cursor screenY: {cursorScreenY}");
+                Log.Trace($"  ScreenY difference: {screenY_difference}, Z change: {projectedZChange:F1} tiles");
+                Log.Trace($"  Direction point: ({projectedX}, {projectedY}, {projectedZ}) (Z={_world.Player.Z} -> {projectedZ})");
                 Log.Trace($"  Player base position: ({_world.Player.X}, {_world.Player.Y}, {_world.Player.Z})");
             }
 

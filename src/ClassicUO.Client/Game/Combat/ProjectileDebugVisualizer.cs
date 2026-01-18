@@ -214,12 +214,17 @@ namespace ClassicUO.Game.Combat
             private long _expirationTime;
             private Color _color;
             private const int LINE_WIDTH = 2;
+            private bool _isClientCalculated;
+            private bool _isCursorLine;
 
             public DebugLine(GameObjects.Point3D startLocation, GameObjects.Point3D endLocation, int durationMs, bool isCursorLine = false, bool isClientCalculated = false)
             {
                 _startLocation = startLocation;
                 _endLocation = endLocation;
                 _expirationTime = Time.Ticks + durationMs;
+                _isClientCalculated = isClientCalculated;
+                _isCursorLine = isCursorLine;
+
                 // Use different colors:
                 // - Green for client-calculated line (independent from server)
                 // - Yellow for server-sent cursor line
@@ -248,6 +253,28 @@ namespace ClassicUO.Game.Combat
                 int startScreenY = (_startLocation.X + _startLocation.Y) * 22 - _startLocation.Z * 4 - cameraOffset.Y - 22;
                 int endScreenX = (_endLocation.X - _endLocation.Y) * 22 - cameraOffset.X - 22;
                 int endScreenY = (_endLocation.X + _endLocation.Y) * 22 - _endLocation.Z * 4 - cameraOffset.Y - 22;
+
+                // Add slight perpendicular offset to yellow line (server) so it's visible when overlapping with green line (client)
+                // This allows us to verify they calculate the same values or identify differences
+                if (_isCursorLine && !_isClientCalculated)
+                {
+                    // Calculate perpendicular offset (rotate line direction 90 degrees)
+                    float dx = endScreenX - startScreenX;
+                    float dy = endScreenY - startScreenY;
+                    float length = (float)Math.Sqrt(dx * dx + dy * dy);
+                    if (length > 0.1f)
+                    {
+                        // Perpendicular vector (rotate 90 degrees): (-dy, dx)
+                        float perpX = -dy / length;
+                        float perpY = dx / length;
+                        float offsetAmount = 3.0f; // 3 pixels offset
+
+                        startScreenX += (int)(perpX * offsetAmount);
+                        startScreenY += (int)(perpY * offsetAmount);
+                        endScreenX += (int)(perpX * offsetAmount);
+                        endScreenY += (int)(perpY * offsetAmount);
+                    }
+                }
 
                 // Fade out over time
                 float remainingTime = _expirationTime - Time.Ticks;
