@@ -137,5 +137,15 @@ namespace ClassicUO.Game
             public const string SOUND_FILTER_IDS = "sound_filter_ids";
             public const string DISABLE_WEATHER = "disable_weather";
         }
+
+        public static class ChargedShotOffsets
+        {
+            public const int MOUNTED_X = 1;
+            public const int MOUNTED_Z = 15;
+            public const int GARGOYLE_X = 1;
+            public const int GARGOYLE_Z = 12;
+            public const int UNMOUNTED_X = 1;
+            public const int UNMOUNTED_Z = 10;
+        }
     }
 }

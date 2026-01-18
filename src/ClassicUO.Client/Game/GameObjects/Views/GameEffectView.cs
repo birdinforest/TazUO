@@ -93,8 +93,19 @@ namespace ClassicUO.Game.GameObjects
                 return false;
             }
 
+            int originalPosX = posX;
+            int originalPosY = posY;
+
             posX += (int)Offset.X;
             posY += (int)(Offset.Z + Offset.Y);
+
+            // Debug logging for MovingEffect (graphic 3906 is arrow)
+            if (this is MovingEffect && Graphic == 3906)
+            {
+                Console.WriteLine($"[GameEffectView.Draw] Arrow Render: RealScreenPos=({RealScreenPosition.X},{RealScreenPosition.Y}), Offset=({Offset.X:F1},{Offset.Y:F1},{Offset.Z:F1})");
+                Console.WriteLine($"[GameEffectView.Draw] Arrow Render: originalPos=({originalPosX},{originalPosY}) -> finalPos=({posX},{posY})");
+                Console.WriteLine($"[GameEffectView.Draw] Arrow Render: World pos=({X},{Y},{Z}), AngleToTarget={(this as MovingEffect)?.AngleToTarget * 180 / Math.PI:F1}°");
+            }
 
             ushort hue = Hue;
 

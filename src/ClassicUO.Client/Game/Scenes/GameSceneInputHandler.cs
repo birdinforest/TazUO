@@ -120,28 +120,178 @@ namespace ClassicUO.Game.Scenes
             // Detect left mouse button PRESS
             if (leftMousePressed && !_leftMouseWasPressed)
             {
+                // Get aim direction point (represents aiming direction, not ground position)
+                Point3D directionPoint = GetAimDirectionPoint();
+
+                // Log current cursor position
+                Point mousePos = Mouse.Position;
+                Log.Trace($"[SpecialCombat] Client aim direction - Screen: ({mousePos.X}, {mousePos.Y}), Direction Point: ({directionPoint.X}, {directionPoint.Y}, {directionPoint.Z})");
+
                 // Send generic input - server decides what this does
                 AsyncNetClient.Socket.Send_SpecialCombatInput(
                     ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
-                    ClassicUO.Network.NetClientExt.MouseButton.Left
+                    ClassicUO.Network.NetClientExt.MouseButton.Left,
+                    directionPoint
                 );
 
-                Log.Trace("[SpecialCombat] Sent: Left Press");
+                Log.Trace($"[SpecialCombat] Sent: Left Press with direction point {directionPoint}");
             }
             // Detect left mouse button RELEASE
             else if (!leftMousePressed && _leftMouseWasPressed)
             {
+                // Get aim direction point (represents aiming direction, not ground position)
+                Point3D directionPoint = GetAimDirectionPoint();
+
+                // Get character position with offset (matching server calculation)
+                (int xOffset, int zOffset) = GetCharacterOffset();
+                var characterPosition = new Point3D(
+                    _world.Player.X + xOffset,
+                    _world.Player.Y,
+                    _world.Player.Z + zOffset);
+
+                // Add client-calculated debug line for comparison (independent from server)
+                // This should now match the server's yellow/cyan lines
+                Combat.ProjectileDebugVisualizer.AddClientCalculatedLine(characterPosition, directionPoint);
+
                 // Send generic input - server decides what this does
                 AsyncNetClient.Socket.Send_SpecialCombatInput(
                     ClassicUO.Network.NetClientExt.SpecialCombatInputType.Release,
-                    ClassicUO.Network.NetClientExt.MouseButton.Left
+                    ClassicUO.Network.NetClientExt.MouseButton.Left,
+                    directionPoint
                 );
 
-                Log.Trace("[SpecialCombat] Sent: Left Release");
+                Log.Trace($"[SpecialCombat] Sent: Left Release with direction point {directionPoint}");
+            }
+
+            // Direction tracking for ManualArm mode (threshold-based updates)
+            // Only sends packet when UO direction changes, not every mouse move
+            if (Combat.SpecialCombatOperationManager.Instance.IsTrackingDirection)
+            {
+                Point3D directionPoint = GetAimDirectionPoint();
+
+                // // Log direction point during direction tracking
+                // Point mousePos = Mouse.Position;
+                // Log.Trace($"[SpecialCombat] Client direction tracking - Screen: ({mousePos.X}, {mousePos.Y}), Direction Point: ({directionPoint.X}, {directionPoint.Y}, {directionPoint.Z})");
+
+                Combat.SpecialCombatOperationManager.Instance.OnMouseMove(
+                    directionPoint.X, directionPoint.Y);
             }
 
             // Update state for next frame
             _leftMouseWasPressed = leftMousePressed;
+        }
+
+        /// <summary>
+        /// Get world position from current mouse cursor position.
+        /// Converts screen coordinates to isometric world coordinates using the actual rendering offset system.
+        /// This matches the same coordinate system used by UpdateRealScreenPosition for accurate tile calculation.
+        ///
+        /// Coordinate System Analysis:
+        /// - Mouse.Position is in backbuffer coordinates (absolute, scaled by RenderScale)
+        /// - Camera.Bounds defines the game viewport within the window
+        /// - RealScreenPosition is calculated using _offset (camera offset) and is relative to game view
+        /// - To convert Mouse.Position to game view coordinates, subtract Camera.Bounds.X/Y
+        /// - Then use RealScreenPosition as reference point for world position calculation
+        /// </summary>
+        /// <summary>
+        /// Calculate aim direction from character's visual center to cursor on screen.
+        /// Returns a point along the ray at a fixed distance (100 tiles) to represent direction.
+        /// This ensures visual alignment regardless of terrain elevation.
+        ///
+        /// This method uses screen ray casting instead of ground projection, meaning:
+        /// - The cursor represents a DIRECTION in 3D space, not a destination on the ground
+        /// - Arrows travel toward where the cursor appears on screen, independent of terrain
+        /// - Perfect visual alignment for free-aim shooting
+        /// </summary>
+        private Point3D GetAimDirectionPoint()
+        {
+            // 1. Get character's VISUAL center on screen (not tile base)
+            // This is where the character's sprite center appears visually to the player
+            int charScreenX = _world.Player.RealScreenPosition.X
+                            - _world.Player.FrameInfo.X + 22
+                            + (int)_world.Player.Offset.X;
+            int charScreenY = _world.Player.RealScreenPosition.Y
+                            - _world.Player.FrameInfo.Y + 22
+                            + (int)(_world.Player.Offset.Y - _world.Player.Offset.Z)
+                            + (_world.Player.FrameInfo.Height / 2); // Sprite center height
+
+            // 2. Get cursor position in game view coordinates
+            int cursorScreenX = Mouse.Position.X - Camera.Bounds.X;
+            int cursorScreenY = Mouse.Position.Y - Camera.Bounds.Y;
+
+            // 3. Calculate screen space delta (from character visual center to cursor)
+            int screenDeltaX = cursorScreenX - charScreenX;
+            int screenDeltaY = cursorScreenY - charScreenY;
+
+            // 4. Convert screen delta to world direction using isometric inverse projection
+            // Isometric formulas (UO uses 22 pixels per tile):
+            //   screenX = (worldX - worldY) * 22
+            //   screenY = (worldX + worldY) * 22 - worldZ * 4
+            // Inverse (for direction, not absolute position):
+            //   worldDirX = (screenDX + screenDY) / 44
+            //   worldDirY = (screenDY - screenDX) / 44
+            //   worldDirZ = 0 (horizontal aiming - can be extended for vertical)
+
+            double worldDirX = (screenDeltaX + screenDeltaY) / 44.0;
+            double worldDirY = (screenDeltaY - screenDeltaX) / 44.0;
+            double worldDirZ = 0; // Horizontal plane (UO convention)
+
+            // 5. Normalize and project to a fixed distance (100 tiles)
+            // This creates a "direction point" that the server can use to calculate direction vector
+            double length = Math.Sqrt(worldDirX * worldDirX + worldDirY * worldDirY);
+            if (length < 0.001) // Avoid division by zero
+            {
+                // Default to facing east if cursor is directly on character
+                worldDirX = 1.0;
+                worldDirY = 0.0;
+                length = 1.0;
+            }
+
+            // 5. Project to a fixed distance (100 tiles) to create a "direction point"
+            // IMPORTANT: Direction point should NOT include offset - it represents pure direction from screen ray cast
+            // The offset is only used for the starting position of the projectile/debug line, not the direction
+            const double PROJECTION_DISTANCE = 100.0; // Fixed distance for direction point
+            int projectedX = _world.Player.X + (int)(worldDirX / length * PROJECTION_DISTANCE);
+            int projectedY = _world.Player.Y + (int)(worldDirY / length * PROJECTION_DISTANCE);
+            int projectedZ = _world.Player.Z; // Pure direction, no offset
+
+            // Log for debugging (throttled to reduce spam)
+            if (Time.Ticks % 1000 < 50) // Log roughly once per second
+            {
+                Log.Trace($"[GetAimDirectionPoint] Screen Ray Cast:");
+                Log.Trace($"  Character screen: ({charScreenX}, {charScreenY})");
+                Log.Trace($"  Cursor screen: ({cursorScreenX}, {cursorScreenY})");
+                Log.Trace($"  Screen delta: ({screenDeltaX}, {screenDeltaY})");
+                Log.Trace($"  World direction (normalized): ({worldDirX / length:F3}, {worldDirY / length:F3}, {worldDirZ / length:F3})");
+                Log.Trace($"  Direction point (NO offset): ({projectedX}, {projectedY}, {projectedZ})");
+                Log.Trace($"  Player base position: ({_world.Player.X}, {_world.Player.Y}, {_world.Player.Z})");
+            }
+
+            // Clamp to valid world coordinates (0-6143 for UO maps)
+            projectedX = Math.Max(0, Math.Min(6143, projectedX));
+            projectedY = Math.Max(0, Math.Min(4095, projectedY));
+
+            return new Point3D(projectedX, projectedY, projectedZ);
+        }
+
+        /// <summary>
+        /// Get X and Z offsets for arrow start position based on character state.
+        /// This matches the server-side calculation to ensure client debug lines align with server.
+        /// Returns (xOffset, zOffset)
+        /// </summary>
+        private (int xOffset, int zOffset) GetCharacterOffset()
+        {
+            // Match server-side logic in ChargedShotOperation.cs
+            if (_world.Player.IsMounted)
+                return (Constants.ChargedShotOffsets.MOUNTED_X, Constants.ChargedShotOffsets.MOUNTED_Z);  // Mounted characters shoot from higher position
+                                                                                                          // return (0, 0);
+            else if (_world.Player.Graphic == 666 || _world.Player.Graphic == 667)  // Gargoyle bodies
+                return (Constants.ChargedShotOffsets.GARGOYLE_X, Constants.ChargedShotOffsets.GARGOYLE_Z);  // Gargoyles may have different height
+                                                                                                            // return (0, 0);
+            else
+                return (Constants.ChargedShotOffsets.UNMOUNTED_X, Constants.ChargedShotOffsets.UNMOUNTED_Z);  // Standard human-height characters
+                                                                                                              // return (0, 0);
+
         }
 
         private bool MoveCharByController()

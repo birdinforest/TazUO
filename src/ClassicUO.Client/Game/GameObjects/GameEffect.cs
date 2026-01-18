@@ -157,6 +157,8 @@ namespace ClassicUO.Game.GameObjects
         {
             Source = source;
             SetInWorldTile(source.X, source.Y, source.Z);
+            string serialInfo = source is Entity entity ? $"Serial={entity.Serial}" : "NotEntity";
+            ClassicUO.Utility.Logging.Log.Trace($"[GameEffect.SetSource] Entity: {serialInfo}, Position=({source.X}, {source.Y}, {source.Z})");
         }
 
         public void SetSource(ushort x, ushort y, sbyte z)
@@ -164,6 +166,7 @@ namespace ClassicUO.Game.GameObjects
             Source = null;
 
             SetInWorldTile(x, y,z);
+            ClassicUO.Utility.Logging.Log.Trace($"[GameEffect.SetSource] Coordinates: Position=({x}, {y}, {z})");
         }
 
         protected (ushort x, ushort y, sbyte z) GetTarget() => Target == null ? (TargetX, TargetY, TargetZ) : (Target.X, Target.Y, Target.Z);

@@ -2,8 +2,10 @@
 
 using System;
 using System.Collections.Generic;
+using ClassicUO.Game.Data;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Game.Managers;
+using ClassicUO.Game.Scenes;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Utility;
 
@@ -14,8 +16,11 @@ namespace ClassicUO.Game.Combat
     /// </summary>
     public class ChargedShotInfo : SpecialCombatOperationInfo
     {
-        public float ChargeTime { get; set; } = 3.0f;
+        public float ChargeTime { get; set; } = 1.0f;
         public bool FullyCharged { get; set; } = false;
+
+        // ManualArm mode: player aims with cursor instead of targeting a mobile
+        public bool ManualArm { get; set; } = false;
 
         // Client-side UI start time (for smooth progress bar animation starting from 0%)
         // StartTime (from base class) is the server's authoritative time
@@ -25,6 +30,8 @@ namespace ClassicUO.Game.Combat
         {
             base.UpdateFromServer(state, metadataJson);
 
+            Log.Trace($"[ChargedShotOperation] UpdateFromServer: metadata: {metadataJson}");
+            Log.Trace($"[ChargedShotOperation] UpdateFromServer: state: {state}");
 
             // Parse charged shot specific metadata
             if (Metadata != null)
@@ -106,6 +113,28 @@ namespace ClassicUO.Game.Combat
                         Log.Warn($"[ChargedShotOperation] Failed to parse fullyCharged: {ex.Message}");
                     }
                 }
+
+                // Parse ManualArm mode flag from server
+                if (Metadata.TryGetValue("manualArm", out object manualArm))
+                {
+                    try
+                    {
+                        if (manualArm is System.Text.Json.JsonElement jsonElement)
+                        {
+                            ManualArm = jsonElement.GetBoolean();
+                        }
+                        else
+                        {
+                            ManualArm = Convert.ToBoolean(manualArm);
+                        }
+                        Log.Trace($"[ChargedShotOperation] ManualArm mode: {ManualArm}");
+                    }
+                    catch (Exception ex)
+                    {
+                        ManualArm = false;
+                        Log.Warn($"[ChargedShotOperation] Failed to parse manualArm: {ex.Message}");
+                    }
+                }
             }
         }
     }
@@ -176,6 +205,12 @@ namespace ClassicUO.Game.Combat
                     ShowUI();
                     // Register frame events for draw animation
                     RegisterDrawAnimationEvents();
+
+                    // Start direction tracking for ManualArm mode (threshold-based updates)
+                    if (_info.ManualArm)
+                    {
+                        SpecialCombatOperationManager.Instance.StartDirectionTracking();
+                    }
                     break;
 
                 case SpecialCombatOperationState.Ready:
@@ -200,6 +235,8 @@ namespace ClassicUO.Game.Combat
                 case SpecialCombatOperationState.Completed:
                 case SpecialCombatOperationState.Canceled:
                 case SpecialCombatOperationState.Interrupted:
+                    // Stop direction tracking for ManualArm mode
+                    SpecialCombatOperationManager.Instance.StopDirectionTracking();
                     ClearAllFrameEvents();
                     HideUI();
                     break;
@@ -210,6 +247,27 @@ namespace ClassicUO.Game.Combat
         {
             // Local UI updates (progress calculation handled by indicator)
             // No game logic here - server drives state
+
+            // Local visual rotation for ManualArm mode (instant feedback)
+            // This provides 0ms latency visual feedback while threshold packets sync to server
+            if (_info.ManualArm &&
+                (CurrentState == SpecialCombatOperationState.Preparing ||
+                 CurrentState == SpecialCombatOperationState.Ready))
+            {
+                var player = _world?.Player;
+                if (player != null && SelectedObject.Object is GameObjects.GameObject cursorObj)
+                {
+                    // Calculate direction from player to cursor position
+                    Direction newDir = DirectionHelper.CalculateDirection(
+                        player.X, player.Y, cursorObj.X, cursorObj.Y);
+
+                    // Update local sprite direction (visual only, server is authoritative)
+                    if (newDir != Direction.NONE && (player.Direction & Direction.Mask) != newDir)
+                    {
+                        player.Direction = (player.Direction & Direction.Running) | newDir;
+                    }
+                }
+            }
 
             // CRITICAL: Register frame events proactively when animation is detected
             // Animation packets can arrive BEFORE state updates, causing frame events to be missed

@@ -133,6 +133,12 @@ namespace ClassicUO.Configuration
         public bool RestoreScaleAfterUnpressCtrl { get; set; }
         public bool BandageSelfOld { get; set; } = true;
 
+        // Projectile Debug Visualization (Client-side only)
+        public bool DebugVisualizeProjectileCollisions { get; set; } = false;
+        public bool DebugShowProjectileTrajectory { get; set; } = false;
+        public bool DebugShowDirectionLine { get; set; } = false; // Show server-sent direction line
+        public int DebugCollisionMarkerDuration { get; set; } = 3000; // milliseconds
+
         // Bandage Agent Settings
         public bool EnableBandageAgent { get; set; } = false;
         public int BandageAgentDelay { get; set; } = 3000;

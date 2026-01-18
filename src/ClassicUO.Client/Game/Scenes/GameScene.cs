@@ -3,6 +3,7 @@
 
 using ClassicUO.Assets;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Combat;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
@@ -919,6 +920,8 @@ namespace ClassicUO.Game.Scenes
             // Update advanced animation system
             AnimationSystem.Instance.Update(_world);
 
+            // Update projectile debug markers
+            ProjectileDebugVisualizer.Update();
 
             if (
                 (currentProfile.CorpseOpenOptions == 1 || currentProfile.CorpseOpenOptions == 3)
@@ -1303,6 +1306,10 @@ namespace ClassicUO.Game.Scenes
 
             DrawOverheads(batcher);
             DrawSelection(batcher);
+
+            // Render projectile debug markers (client-side only, no network packets)
+            // Use the same offset as UpdateRealScreenPosition for consistency
+            ProjectileDebugVisualizer.Render(batcher, _offset);
 
             batcher.End();
 

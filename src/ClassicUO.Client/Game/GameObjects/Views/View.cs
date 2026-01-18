@@ -254,15 +254,15 @@ namespace ClassicUO.Game.GameObjects
                 batcher.Draw(
                     artInfo.Texture,
                     new Rectangle(
-                        x - index.Width,
-                        y - index.Height,
+                        x - (artInfo.UV.Width / 2),   // Center horizontally
+                        y - (artInfo.UV.Height / 2),  // Center vertically
                         artInfo.UV.Width,
                         artInfo.UV.Height
                     ),
                     artInfo.UV,
                     hue,
                     angle,
-                    Vector2.Zero,
+                    new Vector2(artInfo.UV.Width / 2f, artInfo.UV.Height / 2f),  // Rotates around center
                     SpriteEffects.None,
                     renderDepth
                 );

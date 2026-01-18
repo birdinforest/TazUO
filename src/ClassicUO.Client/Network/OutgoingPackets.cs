@@ -4719,9 +4719,10 @@ namespace ClassicUO.Network
         /// </summary>
         public enum SpecialCombatInputType : byte
         {
-            Press = 0x01,      // Button pressed
-            Release = 0x02,    // Button released
-            Cancel = 0x03      // Explicit cancel (e.g., ESC key)
+            Press = 0x01,           // Button pressed
+            Release = 0x02,         // Button released
+            Cancel = 0x03,          // Explicit cancel (e.g., ESC key)
+            DirectionUpdate = 0x04  // Direction changed (threshold-based, sent when crossing 45° boundary)
         }
 
         /// <summary>
@@ -4735,31 +4736,36 @@ namespace ClassicUO.Network
         }
 
         /// <summary>
-        /// Sends generic special combat input to server.
+        /// Sends generic special combat input to server with cursor world position.
         /// Server decides what operation (if any) this triggers based on context.
-        /// Packet 0xBF subcommand 0x0033
+        /// Packet 0xBF subcommand 0x0033 (extended to 14 bytes for cursor position)
         /// </summary>
         /// <param name="inputType">Type of input (Press, Release, Cancel)</param>
         /// <param name="mouseButton">Which mouse button (Left, Right, Middle)</param>
+        /// <param name="cursorWorldPosition">World position of cursor at time of input</param>
         public static void Send_SpecialCombatInput(
             this AsyncNetClient socket,
             SpecialCombatInputType inputType,
-            MouseButton mouseButton = MouseButton.Left)
+            MouseButton mouseButton = MouseButton.Left,
+            Point3D cursorWorldPosition = default)
         {
             const byte ID = 0xBF; // Extended command packet
 
-            var writer = new StackDataWriter(8); // Fixed 8-byte packet
-            writer.WriteUInt8(ID);                          // Packet ID: 0xBF
-            writer.WriteUInt16BE(8);                        // Length: 8 bytes
-            writer.WriteUInt16BE(0x0033);                   // Subcommand: 0x0033 (Special Combat Input)
-            writer.WriteUInt8((byte)inputType);             // Input type
-            writer.WriteUInt8((byte)mouseButton);           // Mouse button
-            writer.WriteUInt8(0);                           // Reserved for future use
+            var writer = new StackDataWriter(14); // Updated to 14-byte packet for cursor position
+            writer.WriteUInt8(ID);                                     // Packet ID: 0xBF
+            writer.WriteUInt16BE(14);                                  // Length: 14 bytes
+            writer.WriteUInt16BE(0x0033);                              // Subcommand: 0x0033 (Special Combat Input)
+            writer.WriteUInt8((byte)inputType);                        // Input type
+            writer.WriteUInt8((byte)mouseButton);                      // Mouse button
+            writer.WriteUInt16BE((ushort)cursorWorldPosition.X);       // Cursor X (world coord)
+            writer.WriteUInt16BE((ushort)cursorWorldPosition.Y);       // Cursor Y (world coord)
+            writer.WriteInt8((sbyte)cursorWorldPosition.Z);           // Cursor Z (world coord)
+            writer.WriteUInt16BE(0);                                   // Reserved
 
             socket.Send(writer.BufferWritten);
             writer.Dispose();
 
-            Console.WriteLine($"[SpecialCombat] Sent input: {inputType} {mouseButton}");
+            Console.WriteLine($"[SpecialCombat] Sent input: {inputType} {mouseButton} @ {cursorWorldPosition}");
         }
     }
 }

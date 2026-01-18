@@ -4990,6 +4990,44 @@ sealed class PacketHandlers
                 }
                 break;
 
+            case 0x0036: // Debug Direction Line (Arrow direction)
+                {
+                    ushort startX = p.ReadUInt16BE();
+                    ushort startY = p.ReadUInt16BE();
+                    sbyte startZ = p.ReadInt8();
+                    ushort endX = p.ReadUInt16BE();
+                    ushort endY = p.ReadUInt16BE();
+                    sbyte endZ = p.ReadInt8();
+
+                    var startLocation = new Game.GameObjects.Point3D(startX, startY, startZ);
+                    var endLocation = new Game.GameObjects.Point3D(endX, endY, endZ);
+
+                    Log.Trace($"[PacketHandler] Debug direction line (arrow): ({startX}, {startY}, {startZ}) -> ({endX}, {endY}, {endZ})");
+
+                    // Add debug line to visualizer (arrow direction line)
+                    Game.Combat.ProjectileDebugVisualizer.AddDirectionLine(startLocation, endLocation, isCursorLine: false);
+                }
+                break;
+
+            case 0x0037: // Debug Cursor Line (Character to cursor)
+                {
+                    ushort startX = p.ReadUInt16BE();
+                    ushort startY = p.ReadUInt16BE();
+                    sbyte startZ = p.ReadInt8();
+                    ushort endX = p.ReadUInt16BE();
+                    ushort endY = p.ReadUInt16BE();
+                    sbyte endZ = p.ReadInt8();
+
+                    var startLocation = new Game.GameObjects.Point3D(startX, startY, startZ);
+                    var endLocation = new Game.GameObjects.Point3D(endX, endY, endZ);
+
+                    Log.Trace($"[PacketHandler] Debug direction line (cursor): ({startX}, {startY}, {startZ}) -> ({endX}, {endY}, {endZ})");
+
+                    // Add debug line to visualizer (cursor line)
+                    Game.Combat.ProjectileDebugVisualizer.AddDirectionLine(startLocation, endLocation, isCursorLine: true);
+                }
+                break;
+
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
 

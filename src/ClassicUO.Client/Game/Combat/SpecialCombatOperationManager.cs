@@ -3,6 +3,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ClassicUO.Game.Data;
+using ClassicUO.Game.GameObjects;
+using ClassicUO.Network;
 using ClassicUO.Utility.Logging;
 
 namespace ClassicUO.Game.Combat
@@ -20,6 +23,11 @@ namespace ClassicUO.Game.Combat
         private readonly Dictionary<string, SpecialCombatOperation> _activeOperations;
         private readonly Dictionary<string, Func<World, SpecialCombatOperation>> _operationFactories;
         private World _world;
+
+        // Threshold-based direction tracking for ManualArm mode
+        // Only sends updates when UO direction (8-way) changes, not every mouse move
+        private bool _isTrackingDirection = false;
+        private Direction _lastSentDirection = Direction.NONE;
 
         private SpecialCombatOperationManager()
         {
@@ -137,6 +145,63 @@ namespace ClassicUO.Game.Combat
         public bool HasAnyActiveOperation() => _activeOperations.Count > 0;
         public SpecialCombatOperation GetOperation(string operationId) => _activeOperations.GetValueOrDefault(operationId);
         public IReadOnlyDictionary<string, SpecialCombatOperation> GetAllActiveOperations() => _activeOperations;
+
+        // Direction tracking for ManualArm mode
+        public bool IsTrackingDirection => _isTrackingDirection;
+
+        /// <summary>
+        /// Start tracking mouse direction for ManualArm mode.
+        /// Called when a ManualArm operation begins (e.g., ChargedShot with manualArm enabled).
+        /// </summary>
+        public void StartDirectionTracking()
+        {
+            _isTrackingDirection = true;
+            _lastSentDirection = Direction.NONE;
+            Log.Trace("[SpecialCombatManager] Direction tracking started");
+        }
+
+        /// <summary>
+        /// Stop tracking mouse direction.
+        /// Called when operation ends or is canceled.
+        /// </summary>
+        public void StopDirectionTracking()
+        {
+            _isTrackingDirection = false;
+            _lastSentDirection = Direction.NONE;
+            Log.Trace("[SpecialCombatManager] Direction tracking stopped");
+        }
+
+        /// <summary>
+        /// Called on mouse move to check for direction changes.
+        /// Only sends packet when UO direction (8-way) changes from last sent direction.
+        /// This implements threshold-based updates: max 7 packets per draw instead of continuous.
+        /// </summary>
+        /// <param name="cursorWorldX">World X coordinate of cursor</param>
+        /// <param name="cursorWorldY">World Y coordinate of cursor</param>
+        public void OnMouseMove(int cursorWorldX, int cursorWorldY)
+        {
+            if (!_isTrackingDirection || _world?.Player == null)
+                return;
+
+            // Calculate direction from player to cursor using UO's 8-way direction system
+            int playerX = _world.Player.X;
+            int playerY = _world.Player.Y;
+            Direction newDirection = DirectionHelper.CalculateDirection(playerX, playerY, cursorWorldX, cursorWorldY);
+
+            // Only send update if direction actually changed (threshold-based)
+            if (newDirection != _lastSentDirection && newDirection != Direction.NONE)
+            {
+                _lastSentDirection = newDirection;
+
+                // Send direction update to server
+                AsyncNetClient.Socket.Send_SpecialCombatInput(
+                    NetClientExt.SpecialCombatInputType.DirectionUpdate,
+                    NetClientExt.MouseButton.Left,
+                    new Point3D(cursorWorldX, cursorWorldY, 0));
+
+                Log.Trace($"[SpecialCombatManager] Direction update sent: {newDirection} (cursor: {cursorWorldX},{cursorWorldY})");
+            }
+        }
     }
 }
 

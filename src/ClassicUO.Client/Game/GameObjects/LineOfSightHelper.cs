@@ -150,13 +150,14 @@ namespace ClassicUO.Game.GameObjects
             return true;
         }
 
-        private readonly struct Point3D
+    }
+
+    public readonly struct Point3D
+    {
+        public readonly int X, Y, Z;
+        public Point3D(int x, int y, int z)
         {
-            public readonly int X, Y, Z;
-            public Point3D(int x, int y, int z)
-            {
-                X = x; Y = y; Z = z;
-            }
+            X = x; Y = y; Z = z;
         }
     }
 }
