@@ -46,7 +46,6 @@ namespace ClassicUO.Game.Combat
 
             _activeMarkers.Add(marker);
 
-            Log.Trace($"[ProjectileDebug] Collision marker at {location}");
         }
 
         /// <summary>
@@ -57,20 +56,14 @@ namespace ClassicUO.Game.Combat
         /// <param name="isCursorLine">If true, renders as cursor line (yellow), else arrow direction (cyan)</param>
         public static void AddDirectionLine(GameObjects.Point3D startLocation, GameObjects.Point3D endLocation, bool isCursorLine = false)
         {
-            Log.Trace($"[ProjectileDebugVisualizer] AddDirectionLine called: ShowDirectionLine={ShowDirectionLine}, CUOEnviroment.Debug={CUOEnviroment.Debug}, Profile.DebugShowDirectionLine={ProfileManager.CurrentProfile?.DebugShowDirectionLine}, isCursorLine={isCursorLine}");
-
             if (!ShowDirectionLine)
             {
-                Log.Trace($"[ProjectileDebugVisualizer] AddDirectionLine skipped: ShowDirectionLine is false");
                 return;
             }
 
             int duration = ProfileManager.CurrentProfile?.DebugCollisionMarkerDuration ?? 5000;
             var line = new DebugLine(startLocation, endLocation, duration, isCursorLine);
             _activeLines.Add(line);
-
-            string lineType = isCursorLine ? "cursor" : "arrow direction";
-            Log.Trace($"[ProjectileDebugVisualizer] {lineType} line added: ({startLocation.X}, {startLocation.Y}, {startLocation.Z}) -> ({endLocation.X}, {endLocation.Y}, {endLocation.Z})");
         }
 
         /// <summary>
@@ -86,13 +79,9 @@ namespace ClassicUO.Game.Combat
                 return;
             }
 
-            Log.Trace($"[ProjectileDebugVisualizer] AddClientCalculatedLine: Character=({characterLocation.X}, {characterLocation.Y}, {characterLocation.Z}), Cursor=({cursorLocation.X}, {cursorLocation.Y}, {cursorLocation.Z})");
-
             int duration = ProfileManager.CurrentProfile?.DebugCollisionMarkerDuration ?? 5000;
             var line = new DebugLine(characterLocation, cursorLocation, duration, false, true); // Use green color for client-calculated line
             _activeLines.Add(line);
-
-            Log.Trace($"[ProjectileDebugVisualizer] Client-calculated line added: ({characterLocation.X}, {characterLocation.Y}, {characterLocation.Z}) -> ({cursorLocation.X}, {cursorLocation.Y}, {cursorLocation.Z})");
         }
 
         /// <summary>

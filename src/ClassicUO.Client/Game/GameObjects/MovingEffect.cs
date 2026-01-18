@@ -48,12 +48,12 @@ namespace ClassicUO.Game.GameObjects
             if (SerialHelper.IsValid(src) && source != null)
             {
                 SetSource(source);
-                ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Using entity source: Serial={src}, Position=({source.X}, {source.Y}, {source.Z})");
+                // ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Using entity source: Serial={src}, Position=({source.X}, {source.Y}, {source.Z})");
             }
             else
             {
                 SetSource(xSource, ySource, zSource);
-                ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Using coordinate source: Serial={src} (Serial.Zero), Position=({xSource}, {ySource}, {zSource})");
+                // ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Using coordinate source: Serial={src} (Serial.Zero), Position=({xSource}, {ySource}, {zSource})");
             }
 
 
@@ -73,7 +73,6 @@ namespace ClassicUO.Game.GameObjects
             {
                 (int sX, int sY, int sZ) = GetSource();
                 (int tX, int tY, int tZ) = GetTarget();
-                ClassicUO.Utility.Logging.Log.Trace($"[ProjectileDebug] Direction line effect received: ({sX}, {sY}, {sZ}) -> ({tX}, {tY}, {tZ}), hue={hue}, speed={speed}, duration={duration}");
             }
 
             // Detect direction-based mode (Serial.Zero source means no entity reference)
@@ -101,7 +100,7 @@ namespace ClassicUO.Game.GameObjects
                     _directionVector = new Vector2(1, 0);  // Default east
                 }
 
-                ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Direction-based projectile: start=({sX},{sY}), end=({tX},{tY}), direction=({_directionVector.X:F3},{_directionVector.Y:F3}), distance={_totalDistance:F2}");
+                // ClassicUO.Utility.Logging.Log.Trace($"[MovingEffect] Direction-based projectile: start=({sX},{sY}), end=({tX},{tY}), direction=({_directionVector.X:F3},{_directionVector.Y:F3}), distance={_totalDistance:F2}");
 
                 // Compensate for sprite rotation origin
                 // DrawStaticRotated rotates around top-left corner (Vector2.Zero), but we want

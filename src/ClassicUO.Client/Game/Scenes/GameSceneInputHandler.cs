@@ -123,18 +123,12 @@ namespace ClassicUO.Game.Scenes
                 // Get aim direction point (represents aiming direction, not ground position)
                 Point3D directionPoint = GetAimDirectionPoint();
 
-                // Log current cursor position
-                Point mousePos = Mouse.Position;
-                Log.Trace($"[SpecialCombat] Client aim direction - Screen: ({mousePos.X}, {mousePos.Y}), Direction Point: ({directionPoint.X}, {directionPoint.Y}, {directionPoint.Z})");
-
                 // Send generic input - server decides what this does
                 AsyncNetClient.Socket.Send_SpecialCombatInput(
                     ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
                     ClassicUO.Network.NetClientExt.MouseButton.Left,
                     directionPoint
                 );
-
-                Log.Trace($"[SpecialCombat] Sent: Left Press with direction point {directionPoint}");
             }
             // Detect left mouse button RELEASE
             else if (!leftMousePressed && _leftMouseWasPressed)
@@ -162,11 +156,6 @@ namespace ClassicUO.Game.Scenes
                     _world.Player.Y,
                     _world.Player.Z + zOffset + visualCenterZOffset);  // Include visual center offset
 
-                Log.Trace($"[SpecialCombat] Debug line start: Player base=({_world.Player.X},{_world.Player.Y},{_world.Player.Z}), " +
-                         $"offset=({xOffset},{zOffset}), sprite offset=({spriteHeightOffset},{visualCenterZOffset}), " +
-                         $"final=({characterPosition.X},{characterPosition.Y},{characterPosition.Z})");
-                Log.Trace($"[SpecialCombat] Debug line end: direction point=({directionPoint.X},{directionPoint.Y},{directionPoint.Z})");
-
                 // Add client-calculated debug line for comparison (independent from server)
                 // This should now match the server's yellow/cyan lines
                 Combat.ProjectileDebugVisualizer.AddClientCalculatedLine(characterPosition, directionPoint);
@@ -177,8 +166,6 @@ namespace ClassicUO.Game.Scenes
                     ClassicUO.Network.NetClientExt.MouseButton.Left,
                     directionPoint
                 );
-
-                Log.Trace($"[SpecialCombat] Sent: Left Release with direction point {directionPoint}");
             }
 
             // Direction tracking for ManualArm mode (threshold-based updates)
@@ -186,10 +173,6 @@ namespace ClassicUO.Game.Scenes
             if (Combat.SpecialCombatOperationManager.Instance.IsTrackingDirection)
             {
                 Point3D directionPoint = GetAimDirectionPoint();
-
-                // // Log direction point during direction tracking
-                // Point mousePos = Mouse.Position;
-                // Log.Trace($"[SpecialCombat] Client direction tracking - Screen: ({mousePos.X}, {mousePos.Y}), Direction Point: ({directionPoint.X}, {directionPoint.Y}, {directionPoint.Z})");
 
                 Combat.SpecialCombatOperationManager.Instance.OnMouseMove(
                     directionPoint.X, directionPoint.Y);
@@ -319,21 +302,6 @@ namespace ClassicUO.Game.Scenes
             // Z_change = -screenY_difference / 4
             double projectedZChange = -screenY_difference / 4.0;
             int projectedZ = _world.Player.Z + (int)projectedZChange;
-
-            // Log for debugging (throttled to reduce spam)
-            if (Time.Ticks % 1000 < 50) // Log roughly once per second
-            {
-                Log.Trace($"[GetAimDirectionPoint] Screen Ray Cast:");
-                Log.Trace($"  Character screen: ({charScreenX}, {charScreenY})");
-                Log.Trace($"  Cursor screen: ({cursorScreenX}, {cursorScreenY})");
-                Log.Trace($"  Screen delta: ({screenDeltaX}, {screenDeltaY})");
-                Log.Trace($"  World direction XY (normalized): ({worldDirX / horizontalLength:F3}, {worldDirY / horizontalLength:F3})");
-                Log.Trace($"  Camera offset Y: {cameraOffsetY}");
-                Log.Trace($"  End point screenY at Player.Z: {endPointScreenY_atPlayerZ}, Cursor screenY: {cursorScreenY}");
-                Log.Trace($"  ScreenY difference: {screenY_difference}, Z change: {projectedZChange:F1} tiles");
-                Log.Trace($"  Direction point: ({projectedX}, {projectedY}, {projectedZ}) (Z={_world.Player.Z} -> {projectedZ})");
-                Log.Trace($"  Player base position: ({_world.Player.X}, {_world.Player.Y}, {_world.Player.Z})");
-            }
 
             // Clamp to valid world coordinates (0-6143 for UO maps)
             projectedX = Math.Max(0, Math.Min(6143, projectedX));
