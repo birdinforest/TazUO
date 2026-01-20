@@ -139,22 +139,11 @@ namespace ClassicUO.Game.Scenes
                 // Get character position with offset (matching server calculation)
                 (int xOffset, int zOffset) = GetCharacterOffset();
 
-                // Calculate visual center Z offset in world space
-                // The direction was calculated from the sprite's visual center (charScreenY)
-                // which includes FrameInfo.Height / 2 pixel offset above the tile base on screen
-                // We need to match this in world space for the debug line start position
-                //
-                // In isometric projection: screenY = ... - worldZ * 4
-                // If we increase worldZ, screenY decreases (moves UP on screen)
-                // Sprite center is above tile base, so it has SMALLER screenY value
-                // To move screenY up by spriteHeightOffset pixels, we increase worldZ by spriteHeightOffset / 4
-                int spriteHeightOffset = _world.Player.FrameInfo.Height / 2;
-                int visualCenterZOffset = spriteHeightOffset / 4;  // Positive: move up in world Z
 
                 var characterPosition = new Point3D(
                     _world.Player.X + xOffset,
                     _world.Player.Y,
-                    _world.Player.Z + zOffset + visualCenterZOffset);  // Include visual center offset
+                    _world.Player.Z + zOffset);
 
                 // Add client-calculated debug line for comparison (independent from server)
                 // This should now match the server's yellow/cyan lines
@@ -206,21 +195,33 @@ namespace ClassicUO.Game.Scenes
         /// </summary>
         private Point3D GetAimDirectionPoint()
         {
-            // 1. Get character's VISUAL center on screen (not tile base)
-            // This is where the character's sprite center appears visually to the player
-            int charScreenX = _world.Player.RealScreenPosition.X
-                            - _world.Player.FrameInfo.X + 22
-                            + (int)_world.Player.Offset.X;
-            int charScreenY = _world.Player.RealScreenPosition.Y
-                            - _world.Player.FrameInfo.Y + 22
-                            + (int)(_world.Player.Offset.Y - _world.Player.Offset.Z)
-                            + (_world.Player.FrameInfo.Height / 2); // Sprite center height
+            // Get character offset to match server-side calculation (needed early for screen position)
+            (int xOffset, int zOffset) = GetCharacterOffset();
 
-            // 2. Get cursor position in game view coordinates
+            // 1. Calculate camera offsets from player's RealScreenPosition
+            // RealScreenPosition.X = ((Player.X - Player.Y) * 22) - cameraOffset.X - 22
+            // RealScreenPosition.Y = ((Player.X + Player.Y) * 22 - (Player.Z << 2)) - cameraOffset.Y - 22
+            int cameraOffsetX = ((_world.Player.X - _world.Player.Y) * 22) - _world.Player.RealScreenPosition.X - 22;
+            int cameraOffsetY = ((_world.Player.X + _world.Player.Y) * 22 - (_world.Player.Z << 2))
+                              - _world.Player.RealScreenPosition.Y - 22;
+
+            // 2. Calculate the ACTUAL projectile start position on screen
+            // This is where the debug line starts and where the arrow originates from
+            // Must match the world position used by server (with offset applied)
+            int startWorldX = _world.Player.X + xOffset;
+            int startWorldY = _world.Player.Y;
+            int startZ = _world.Player.Z + zOffset;
+            int charScreenX = (startWorldX - startWorldY) * 22 - cameraOffsetX - 22;
+            // FIX: Don't include xOffset in Y calculation - it's a lateral offset that shouldn't
+            // affect the visual firing height. Only zOffset should affect screen Y position.
+            // In isometric: +1 world X = +22 screen X AND +22 screen Y, but we only want the X effect for aiming.
+            int charScreenY = ((_world.Player.X + startWorldY) * 22 - (startZ << 2)) - cameraOffsetY - 22;
+
+            // 3. Get cursor position in game view coordinates
             int cursorScreenX = Mouse.Position.X - Camera.Bounds.X;
             int cursorScreenY = Mouse.Position.Y - Camera.Bounds.Y;
 
-            // 3. Calculate screen space delta (from character visual center to cursor)
+            // 4. Calculate screen space delta (from projectile start position to cursor)
             int screenDeltaX = cursorScreenX - charScreenX;
             int screenDeltaY = cursorScreenY - charScreenY;
 
@@ -244,68 +245,51 @@ namespace ClassicUO.Game.Scenes
             double worldDirX = (screenDeltaX + screenDeltaY) / 44.0;
             double worldDirY = (screenDeltaY - screenDeltaX) / 44.0;
 
-            // For projectile movement, we keep direction vector Z = 0 (horizontal aiming)
-            // But we'll adjust the end point's Z to reflect screen ray projection
+            // 5. Project to a fixed distance (100 tiles) to create a "direction point"
+            // IMPORTANT: Direction point MUST be calculated from the same position that will be used
+            // as the projectile/debug line starting point (with character offset applied).
+            // This ensures the direction vector is consistent between client and server.
+            const double PROJECTION_DISTANCE = 100.0; // Fixed distance for direction point
+
+            // Calculate horizontal length for scaling (NOT 3D length - this preserves screen ratio)
             double horizontalLength = Math.Sqrt(worldDirX * worldDirX + worldDirY * worldDirY);
-            if (horizontalLength < 0.001) // Avoid division by zero
+            if (horizontalLength < 0.001)
             {
-                // Default to facing east if cursor is directly on character
+                // Cursor directly above/below character - default to east
                 worldDirX = 1.0;
                 worldDirY = 0.0;
                 horizontalLength = 1.0;
             }
 
-            // 5. Project to a fixed distance (100 tiles) to create a "direction point"
-            // IMPORTANT: Direction point should NOT include character offset - it represents pure direction from screen ray cast
-            // The character offset is only used for the starting position of the projectile/debug line, not the direction
-            const double PROJECTION_DISTANCE = 100.0; // Fixed distance for direction point
+            // Scale horizontal direction to PROJECTION_DISTANCE tiles
+            // This preserves the exact screen direction ratio
+            double scale = PROJECTION_DISTANCE / horizontalLength;
+            double scaledDirX = worldDirX * scale;
+            double scaledDirY = worldDirY * scale;
 
-            // Step 2: Calculate end point world X, Y from horizontal direction
-            int projectedX = _world.Player.X + (int)(worldDirX / horizontalLength * PROJECTION_DISTANCE);
-            int projectedY = _world.Player.Y + (int)(worldDirY / horizontalLength * PROJECTION_DISTANCE);
+            // Calculate Z that makes the endpoint render at the correct screen Y ratio
+            // We need: renderedScreenDeltaY / renderedScreenDeltaX = screenDeltaY / screenDeltaX
+            // renderedScreenDeltaX = (scaledDirX - scaledDirY) * 22
+            // renderedScreenDeltaY = (scaledDirX + scaledDirY) * 22 - scaledDirZ * 4
+            // Solving: scaledDirZ = ((scaledDirX + scaledDirY) * 22 - targetRenderedY) / 4
+            double renderedScreenDeltaX = (scaledDirX - scaledDirY) * 22.0;
+            double targetRenderedScreenDeltaY = (screenDeltaX != 0)
+                ? renderedScreenDeltaX * screenDeltaY / screenDeltaX
+                : (scaledDirX + scaledDirY) * 22.0; // Vertical shot
+            double scaledDirZ = ((scaledDirX + scaledDirY) * 22.0 - targetRenderedScreenDeltaY) / 4.0;
 
-            // Step 3: Calculate end point Z using reverse projection constraint
-            // Goal: Find the Z value that makes the end point render at cursorScreenY on screen
-            //
-            // The isometric rendering formula is:
-            //   screenY = (worldX + worldY) * 22 - worldZ * 4 - cameraOffsetY - 22
-            //
-            // We solve for projectedZ such that the end point's rendered screenY equals cursorScreenY
-            //
-            // Approach:
-            //   1. Calculate cameraOffsetY from player's known rendering position
-            //   2. Calculate where the end point would appear if Z = Player.Z
-            //   3. Calculate the difference from cursor's target position
-            //   4. Solve for Z change needed (screenY changes by -4 per +1 Z)
+            // Project from the OFFSET position (matching characterPositionAtFire on server)
+            int projectedX = startWorldX + (int)Math.Round(scaledDirX);
+            int projectedY = startWorldY + (int)Math.Round(scaledDirY);
+            int projectedZ = startZ + (int)Math.Round(scaledDirZ);
 
-            // 1. Calculate camera offset by working backwards from Player's RealScreenPosition
-            // RealScreenPosition.Y = ((Player.X + Player.Y) * 22 - (Player.Z << 2)) - cameraOffset.Y - 22
-            // Rearranging: cameraOffset.Y = ((Player.X + Player.Y) * 22 - (Player.Z << 2)) - RealScreenPosition.Y - 22
-            int cameraOffsetY = ((_world.Player.X + _world.Player.Y) * 22 - (_world.Player.Z << 2))
-                              - _world.Player.RealScreenPosition.Y - 22;
-
-            // 2. Calculate what the end point's screenY would be if Z = Player.Z
-            // Using the isometric rendering formula with our projected X, Y and Player's Z
-            int endPointScreenY_atPlayerZ = ((projectedX + projectedY) * 22 - (_world.Player.Z << 2))
-                                          - cameraOffsetY - 22;
-
-            // 3. Calculate the difference from cursor's screen Y
-            // Positive difference means cursor is below the projected point (need to decrease Z)
-            // Negative difference means cursor is above the projected point (need to increase Z)
-            int screenY_difference = cursorScreenY - endPointScreenY_atPlayerZ;
-
-            // 4. Calculate Z change needed
-            // The isometric formula shows: screenY = ... - worldZ * 4
-            // So screenY changes by -4 for each +1 Z change
-            // Therefore: if we need screenY to increase (positive diff), Z must decrease
-            //            if we need screenY to decrease (negative diff), Z must increase
-            // Z_change = -screenY_difference / 4
-            double projectedZChange = -screenY_difference / 4.0;
-            int projectedZ = _world.Player.Z + (int)projectedZChange;
-
-            // Clamp to valid world coordinates (0-6143 for UO maps)
+            // Clamp to valid world coordinates
+            // X: 0-6143 (UO map width)
+            // Y: 0-4095 (UO map height)
+            // Z: -128 to 127 (sbyte range, as Z is transmitted as sbyte in packets)
             projectedX = Math.Max(0, Math.Min(6143, projectedX));
             projectedY = Math.Max(0, Math.Min(4095, projectedY));
+            projectedZ = Math.Max(-128, Math.Min(127, projectedZ));
 
             return new Point3D(projectedX, projectedY, projectedZ);
         }

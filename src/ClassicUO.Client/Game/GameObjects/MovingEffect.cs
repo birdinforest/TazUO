@@ -207,7 +207,17 @@ namespace ClassicUO.Game.GameObjects
 
             // Set rotation angle toward movement direction
             IsPositionChanged = true;
-            AngleToTarget = (float)Math.Atan2(-_directionVector.Y, -_directionVector.X);
+
+            // FIX: Convert world direction to SCREEN direction for proper isometric sprite rotation
+            // In isometric projection, world (X,Y) maps to screen differently:
+            //   screenDx = (worldX - worldY) * 22
+            //   screenDy = (worldX + worldY) * 22
+            // The sprite rotation should match the SCREEN direction, not world direction
+            float screenDx = (_directionVector.X - _directionVector.Y) * 22f;
+            float screenDy = (_directionVector.X + _directionVector.Y) * 22f;
+
+            // Use screen-space angle for sprite rotation (FIX for isometric projection)
+            AngleToTarget = (float)Math.Atan2(-screenDy, -screenDx);
         }
 
         private void UpdateTargetBasedOffset()
@@ -328,18 +338,23 @@ namespace ClassicUO.Game.GameObjects
             int offsetTargetY = tY - playerY;
             int offsetTargetZ = tZ - playerZ;
 
-            var source = new Vector2((offsetSourceX - offsetSourceY) * 22, (offsetSourceX + offsetSourceY) * 22 - offsetSourceZ * 4);
+            // Calculate raw source position (without Offset) for angle calculation
+            var rawSource = new Vector2((offsetSourceX - offsetSourceY) * 22, (offsetSourceX + offsetSourceY) * 22 - offsetSourceZ * 4);
 
-            Console.WriteLine($"[MovingEffect.Update] BEFORE adding Offset: source screen=({source.X:F1}, {source.Y:F1}), currentOffset=({Offset.X:F1}, {Offset.Y:F1}, {Offset.Z:F1})");
+            // Calculate source with Offset for movement calculation
+            var source = new Vector2(rawSource.X + Offset.X, rawSource.Y + Offset.Y);
 
-            source.X += Offset.X;
-            source.Y += Offset.Y;
-
+            Console.WriteLine($"[MovingEffect.Update] BEFORE adding Offset: source screen=({rawSource.X:F1}, {rawSource.Y:F1}), currentOffset=({Offset.X:F1}, {Offset.Y:F1}, {Offset.Z:F1})");
             Console.WriteLine($"[MovingEffect.Update] AFTER adding Offset: source screen=({source.X:F1}, {source.Y:F1})");
 
             var target = new Vector2((offsetTargetX - offsetTargetY) * 22, (offsetTargetX + offsetTargetY) * 22 - offsetTargetZ * 4);
 
+            // Use source (with Offset) for movement calculation
             Vector2 offset = target - source;
+
+            // Calculate direction from raw source (character center) to target for rotation angle
+            // This matches the debug line calculation which doesn't include sprite offset
+            Vector2 directionForAngle = target - rawSource;
             float distance = offset.Length();
             float frameIndependentSpeed = IntervalInMs * Time.Delta;
             Vector2 s0;
@@ -379,7 +394,9 @@ namespace ClassicUO.Game.GameObjects
 
 
             IsPositionChanged = true;
-            AngleToTarget = (float)Math.Atan2(-offset.Y, -offset.X);
+            // FIX: Use directionForAngle (from raw source to target) instead of offset (from offset source to target)
+            // This aligns the arrow rotation with the debug line which uses character center as origin
+            AngleToTarget = (float)Math.Atan2(-directionForAngle.Y, -directionForAngle.X);
 
             Console.WriteLine($"[MovingEffect.Update] Arrow angle: {AngleToTarget * 180 / Math.PI:F1}° (radians: {AngleToTarget:F3})");
 
