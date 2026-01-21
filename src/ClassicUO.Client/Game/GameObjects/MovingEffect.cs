@@ -79,8 +79,6 @@ namespace ClassicUO.Game.GameObjects
             _isDirectionBased = (Source == null);
             _creationTicks = Time.Ticks;
 
-            Console.WriteLine($"[MovingEffect] Source: {Source}, Target: {Target}");
-
             if (_isDirectionBased)
             {
                 // Calculate direction vector and distance for linear movement
@@ -344,9 +342,6 @@ namespace ClassicUO.Game.GameObjects
             // Calculate source with Offset for movement calculation
             var source = new Vector2(rawSource.X + Offset.X, rawSource.Y + Offset.Y);
 
-            Console.WriteLine($"[MovingEffect.Update] BEFORE adding Offset: source screen=({rawSource.X:F1}, {rawSource.Y:F1}), currentOffset=({Offset.X:F1}, {Offset.Y:F1}, {Offset.Z:F1})");
-            Console.WriteLine($"[MovingEffect.Update] AFTER adding Offset: source screen=({source.X:F1}, {source.Y:F1})");
-
             var target = new Vector2((offsetTargetX - offsetTargetY) * 22, (offsetTargetX + offsetTargetY) * 22 - offsetTargetZ * 4);
 
             // Use source (with Offset) for movement calculation
@@ -398,8 +393,6 @@ namespace ClassicUO.Game.GameObjects
             // This aligns the arrow rotation with the debug line which uses character center as origin
             AngleToTarget = (float)Math.Atan2(-directionForAngle.Y, -directionForAngle.X);
 
-            Console.WriteLine($"[MovingEffect.Update] Arrow angle: {AngleToTarget * 180 / Math.PI:F1}° (radians: {AngleToTarget:F3})");
-
             if (newX != sX || newY != sY)
             {
                 // TODO: Z is wrong. We have to calculate an average
@@ -412,29 +405,24 @@ namespace ClassicUO.Game.GameObjects
 
                 Offset.X = source.X - nextSource.X;
                 Offset.Y = source.Y - nextSource.Y;
-
-                Console.WriteLine($"[MovingEffect.Update] Tile changed ({sX},{sY})->({newX},{newY}), Offset changed: ({oldOffsetX:F1},{oldOffsetY:F1})->({Offset.X:F1},{Offset.Y:F1})");
             }
 
             if (!_isFirstUpdate)
             {
-                Console.WriteLine($"[MovingEffect.Update] Adding movement s0=({s0.X:F1}, {s0.Y:F1}) to Offset");
                 Offset.X += s0.X;
                 Offset.Y += s0.Y;
             }
             else
             {
                 _isFirstUpdate = false;
-                Console.WriteLine($"[MovingEffect.Update] FIRST UPDATE - Skip movement, Offset stays: ({Offset.X:F1}, {Offset.Y:F1})");
             }
-
-            Console.WriteLine($"[MovingEffect.Update] Final Offset: ({Offset.X:F1}, {Offset.Y:F1}, {Offset.Z:F1}), World pos: ({X},{Y},{Z})");
         }
 
         private void RemoveMe()
         {
             // DEBUG: Notify visualizer of collision point
             (int tX, int tY, int tZ) = GetTarget();
+
             ProjectileDebugVisualizer.OnMovingEffectEnd(
                 new Point3D(tX, tY, tZ),
                 Graphic
