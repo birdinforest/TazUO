@@ -105,6 +105,7 @@ namespace ClassicUO.Game.GameObjects
         private bool _animationRepeat;
         private ushort _animationRepeateMode = 1;
         private ushort _animationRepeatModeCount = 1;
+        private long _hitFlashEndTime = 0;  // Time when hit flash effect ends
 
         public Mobile(World world, uint serial) : base(world, serial)
         {
@@ -238,6 +239,20 @@ namespace ClassicUO.Game.GameObjects
         }
 
         public void SetSAPoison(bool value) => _isSA_Poisoned = value;
+
+        /// <summary>
+        /// Set hit flash effect duration (red tint when hit by projectile).
+        /// </summary>
+        /// <param name="duration">Duration in milliseconds</param>
+        public void SetHitFlash(int duration)
+        {
+            _hitFlashEndTime = Time.Ticks + duration;
+        }
+
+        /// <summary>
+        /// Check if hit flash effect is currently active.
+        /// </summary>
+        public bool IsHitFlashActive => Time.Ticks < _hitFlashEndTime;
 
         private void CalculateRandomIdleTime()
         {

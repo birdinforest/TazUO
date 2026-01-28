@@ -22,6 +22,7 @@ namespace ClassicUO.Game
     public sealed class World
     {
         public static World Instance { get; private set; }
+        public EffectManager EffectManager => _effectManager;
         private readonly EffectManager _effectManager;
         private readonly List<uint> _toRemove = new List<uint>();
         private uint _timeToDelete;

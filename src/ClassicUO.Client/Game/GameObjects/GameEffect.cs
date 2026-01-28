@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using System.Collections.Generic;
@@ -183,6 +183,8 @@ namespace ClassicUO.Game.GameObjects
 
         public override void Destroy()
         {
+            // Note: TrackedProjectileEffect handles its own unregistration in its Destroy() override
+
             _manager?.Remove(this);
 
             AnimIndex = 0;

@@ -126,6 +126,11 @@ namespace ClassicUO.Game.GameObjects
                     {
                         overridenHue = profile.PoisonHue;
                     }
+                    // Apply hit flash (red tint) when hit by projectile
+                    else if (IsHitFlashActive)
+                    {
+                        overridenHue = 0x0021;  // Red tint hue for hit flash
+                    }
                 }
             }
 

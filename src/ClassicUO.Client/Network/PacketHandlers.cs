@@ -5028,6 +5028,109 @@ sealed class PacketHandlers
                 }
                 break;
 
+            case 0x0038: // Projectile Collision
+                {
+                    uint effectSerial = p.ReadUInt32BE();
+                    byte collisionType = p.ReadUInt8();
+                    short collX = (short)p.ReadUInt16BE();
+                    short collY = (short)p.ReadUInt16BE();
+                    sbyte collZ = p.ReadInt8();
+                    uint hitMobileSerial = p.ReadUInt32BE();
+                    ushort impactGraphic = p.ReadUInt16BE();
+                    byte intensity = p.ReadUInt8();
+
+                    Log.Trace($"[PacketHandler] Projectile collision: serial={effectSerial}, type={collisionType}, location=({collX}, {collY}, {collZ}), mobile={hitMobileSerial}, graphic={impactGraphic}, intensity={intensity}");
+
+                    // 1. Find and dispose the projectile effect (TrackedProjectileEffect, not MovingEffect)
+                    Game.GameObjects.TrackedProjectileEffect? effect = world.EffectManager.FindTrackedProjectileBySerial(effectSerial);
+                    if (effect != null)
+                    {
+                        // Snap to collision point and dispose
+                        effect.ForceDisposeAtCollision(collX, collY, collZ, createImpact: false);
+                    }
+                    else
+                    {
+                        Log.Trace($"[PacketHandler] Projectile collision: effect serial={effectSerial} not found (already disposed or not tracked)");
+                    }
+
+                    // 2. Create impact effect at collision point
+                    if (impactGraphic != 0)
+                    {
+                        world.EffectManager.CreateEffect(
+                            Game.Data.GraphicEffectType.FixedXYZ,
+                            0,  // source serial
+                            0,  // target serial
+                            impactGraphic,
+                            0,  // hue
+                            (ushort)collX,
+                            (ushort)collY,
+                            collZ,
+                            0,  // targetX
+                            0,  // targetY
+                            0,  // targetZ
+                            0,  // speed
+                            400,  // duration
+                            false,  // fixedDir
+                            false,  // explodes
+                            false,  // hasparticles
+                            Game.Data.GraphicEffectBlendMode.Normal);
+                    }
+
+                    // 3. Apply hit effect to mobile if applicable
+                    if (hitMobileSerial != 0)
+                    {
+                        var mobile = world.Mobiles.Get(hitMobileSerial);
+                        if (mobile != null)
+                        {
+                            Game.Combat.HitEffectRenderer.ApplyHitEffect(mobile, impactGraphic, intensity);
+                        }
+                    }
+                }
+                break;
+
+            case 0x0039: // Projectile Launch (Server-Synchronized)
+                {
+                    uint effectSerial = p.ReadUInt32BE();
+                    short srcX = (short)p.ReadUInt16BE();
+                    short srcY = (short)p.ReadUInt16BE();
+                    sbyte srcZ = p.ReadInt8();
+                    short tgtX = (short)p.ReadUInt16BE();
+                    short tgtY = (short)p.ReadUInt16BE();
+                    sbyte tgtZ = p.ReadInt8();
+                    ushort graphicEffect = p.ReadUInt16BE();
+                    ushort hue = p.ReadUInt16BE();
+                    byte speedTilesPerSecond = p.ReadUInt8();
+                    ushort expectedTravelTimeMs = p.ReadUInt16BE();
+                    bool fixedDir = p.ReadUInt8() != 0;
+                    bool explodes = p.ReadUInt8() != 0;
+
+                    Log.Trace($"[PacketHandler] Projectile launch: serial={effectSerial}, graphic={graphicEffect}, from=({srcX}, {srcY}, {srcZ}) to=({tgtX}, {tgtY}, {tgtZ}), speed={speedTilesPerSecond} t/s, travelTime={expectedTravelTimeMs}ms");
+
+                    // Create TrackedProjectileEffect with server-synchronized timing
+                    var projectileEffect = new Game.GameObjects.TrackedProjectileEffect(
+                        world,
+                        world.EffectManager,
+                        (ushort)srcX,
+                        (ushort)srcY,
+                        srcZ,
+                        (ushort)tgtX,
+                        (ushort)tgtY,
+                        tgtZ,
+                        graphicEffect,
+                        hue,
+                        speedTilesPerSecond,
+                        expectedTravelTimeMs)
+                    {
+                        Blend = Game.Data.GraphicEffectBlendMode.Normal,
+                        CanCreateExplosionEffect = explodes
+                    };
+
+                    // Register with serial and add to manager
+                    world.EffectManager.RegisterTrackedProjectile(effectSerial, projectileEffect);
+                    world.EffectManager.PushToBack(projectileEffect);
+                }
+                break;
+
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
 

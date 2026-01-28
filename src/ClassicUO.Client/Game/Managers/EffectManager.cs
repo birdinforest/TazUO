@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using ClassicUO.Game.Data;
@@ -10,11 +10,87 @@ namespace ClassicUO.Game.Managers
     public sealed class EffectManager : LinkedObject
     {
         private readonly World _world;
+        private readonly System.Collections.Generic.Dictionary<uint, MovingEffect> _movingEffectsBySerial = new System.Collections.Generic.Dictionary<uint, MovingEffect>();
+        private readonly System.Collections.Generic.Dictionary<uint, TrackedProjectileEffect> _trackedProjectilesBySerial = new System.Collections.Generic.Dictionary<uint, TrackedProjectileEffect>();
 
         public EffectManager(World world)
         {
             _world = world;
         }
+
+        #region MovingEffect Registration (Legacy)
+
+        /// <summary>
+        /// Register a moving effect with its server-assigned serial for collision tracking
+        /// </summary>
+        public void RegisterMovingEffect(uint serial, MovingEffect effect)
+        {
+            if (serial != 0 && effect != null)
+            {
+                _movingEffectsBySerial[serial] = effect;
+            }
+        }
+
+        /// <summary>
+        /// Find a moving effect by its server-assigned serial
+        /// </summary>
+        public MovingEffect? FindMovingEffectBySerial(uint serial)
+        {
+            _movingEffectsBySerial.TryGetValue(serial, out MovingEffect? movingEffect);
+            return movingEffect;
+        }
+
+        /// <summary>
+        /// Unregister a moving effect when it's destroyed
+        /// </summary>
+        public void UnregisterMovingEffect(uint serial)
+        {
+            if (serial != 0)
+            {
+                _movingEffectsBySerial.Remove(serial);
+            }
+        }
+
+        #endregion
+
+        #region TrackedProjectileEffect Registration (Server-Synchronized)
+
+        /// <summary>
+        /// Register a tracked projectile effect with its server-assigned serial.
+        /// Used for server-synchronized free-aim projectiles.
+        /// </summary>
+        public void RegisterTrackedProjectile(uint serial, TrackedProjectileEffect effect)
+        {
+            if (serial != 0 && effect != null)
+            {
+                effect.ServerSerial = serial;
+                _trackedProjectilesBySerial[serial] = effect;
+                Log.Trace($"[EffectManager] Registered TrackedProjectileEffect serial={serial}");
+            }
+        }
+
+        /// <summary>
+        /// Find a tracked projectile effect by its server-assigned serial.
+        /// </summary>
+        public TrackedProjectileEffect? FindTrackedProjectileBySerial(uint serial)
+        {
+            _trackedProjectilesBySerial.TryGetValue(serial, out TrackedProjectileEffect? effect);
+            return effect;
+        }
+
+        /// <summary>
+        /// Unregister a tracked projectile effect when it's destroyed.
+        /// </summary>
+        public void UnregisterTrackedProjectile(uint serial)
+        {
+            if (serial != 0)
+            {
+                _trackedProjectilesBySerial.Remove(serial);
+                Log.Trace($"[EffectManager] Unregistered TrackedProjectileEffect serial={serial}");
+            }
+        }
+
+        #endregion
 
         public void Update()
         {

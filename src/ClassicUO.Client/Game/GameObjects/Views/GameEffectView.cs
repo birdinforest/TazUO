@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Renderer;
@@ -99,12 +99,12 @@ namespace ClassicUO.Game.GameObjects
             posX += (int)Offset.X;
             posY += (int)(Offset.Z + Offset.Y);
 
-            // Debug logging for MovingEffect (graphic 3906 is arrow)
-            if (this is MovingEffect && Graphic == 3906)
+            // Debug logging for arrow effects (graphic 0x0F42 = 3906 is arrow)
+            if ((this is MovingEffect || this is TrackedProjectileEffect) && (Graphic == 0x0F42 || Graphic == 3906))
             {
                 Console.WriteLine($"[GameEffectView.Draw] Arrow Render: RealScreenPos=({RealScreenPosition.X},{RealScreenPosition.Y}), Offset=({Offset.X:F1},{Offset.Y:F1},{Offset.Z:F1})");
                 Console.WriteLine($"[GameEffectView.Draw] Arrow Render: originalPos=({originalPosX},{originalPosY}) -> finalPos=({posX},{posY})");
-                Console.WriteLine($"[GameEffectView.Draw] Arrow Render: World pos=({X},{Y},{Z}), AngleToTarget={(this as MovingEffect)?.AngleToTarget * 180 / Math.PI:F1}°");
+                Console.WriteLine($"[GameEffectView.Draw] Arrow Render: World pos=({X},{Y},{Z}), AngleToTarget={AngleToTarget * 180 / Math.PI:F1}°");
             }
 
             ushort hue = Hue;
