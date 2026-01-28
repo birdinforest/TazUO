@@ -34,6 +34,11 @@ namespace ClassicUO.Game.Scenes
         private bool _rightMousePressed,
             _continueRunning;
         private bool _leftMouseWasPressed = false;
+        /// <summary>
+        /// True when we skipped sending special combat Press because the click was on an entity (e.g. mobile)
+        /// that can have an HP bar, so we must also skip Release for this gesture.
+        /// </summary>
+        private bool _specialCombatPressSkippedBecauseEntity;
         private Point _selectionStart,
             _selectionEnd;
         private int AnchorOffset => ProfileManager.CurrentProfile.DragSelectAsAnchor ? 0 : 2;
@@ -120,41 +125,60 @@ namespace ClassicUO.Game.Scenes
             // Detect left mouse button PRESS
             if (leftMousePressed && !_leftMouseWasPressed)
             {
-                // Get aim direction point (represents aiming direction, not ground position)
-                Point3D directionPoint = GetAimDirectionPoint();
+                // Skip special combat when click is on an entity that can have an HP bar (mobile or damageable item),
+                // so that dragging from a mobile to open/drag its HP bar does not trigger special combat.
+                bool clickOnEntityWithHealthBar = SelectedObject.Object is Entity ent
+                    && (SerialHelper.IsMobile(ent.Serial) || (ent is Item item && item.IsDamageable));
+                if (clickOnEntityWithHealthBar)
+                {
+                    _specialCombatPressSkippedBecauseEntity = true;
+                }
+                else
+                {
+                    _specialCombatPressSkippedBecauseEntity = false;
+                    // Get aim direction point (represents aiming direction, not ground position)
+                    Point3D directionPoint = GetAimDirectionPoint();
 
-                // Send generic input - server decides what this does
-                AsyncNetClient.Socket.Send_SpecialCombatInput(
-                    ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
-                    ClassicUO.Network.NetClientExt.MouseButton.Left,
-                    directionPoint
-                );
+                    // Send generic input - server decides what this does
+                    AsyncNetClient.Socket.Send_SpecialCombatInput(
+                        ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
+                        ClassicUO.Network.NetClientExt.MouseButton.Left,
+                        directionPoint
+                    );
+                }
             }
             // Detect left mouse button RELEASE
             else if (!leftMousePressed && _leftMouseWasPressed)
             {
-                // Get aim direction point (represents aiming direction, not ground position)
-                Point3D directionPoint = GetAimDirectionPoint();
+                if (_specialCombatPressSkippedBecauseEntity)
+                {
+                    _specialCombatPressSkippedBecauseEntity = false;
+                }
+                else
+                {
+                    // Get aim direction point (represents aiming direction, not ground position)
+                    Point3D directionPoint = GetAimDirectionPoint();
 
-                // Get character position with offset (matching server calculation)
-                (int xOffset, int zOffset) = GetCharacterOffset();
+                    // Get character position with offset (matching server calculation)
+                    (int xOffset, int zOffset) = GetCharacterOffset();
 
 
-                var characterPosition = new Point3D(
-                    _world.Player.X + xOffset,
-                    _world.Player.Y,
-                    _world.Player.Z + zOffset);
+                    var characterPosition = new Point3D(
+                        _world.Player.X + xOffset,
+                        _world.Player.Y,
+                        _world.Player.Z + zOffset);
 
-                // Add client-calculated debug line for comparison (independent from server)
-                // This should now match the server's yellow/cyan lines
-                Combat.ProjectileDebugVisualizer.AddClientCalculatedLine(characterPosition, directionPoint);
+                    // Add client-calculated debug line for comparison (independent from server)
+                    // This should now match the server's yellow/cyan lines
+                    Combat.ProjectileDebugVisualizer.AddClientCalculatedLine(characterPosition, directionPoint);
 
-                // Send generic input - server decides what this does
-                AsyncNetClient.Socket.Send_SpecialCombatInput(
-                    ClassicUO.Network.NetClientExt.SpecialCombatInputType.Release,
-                    ClassicUO.Network.NetClientExt.MouseButton.Left,
-                    directionPoint
-                );
+                    // Send generic input - server decides what this does
+                    AsyncNetClient.Socket.Send_SpecialCombatInput(
+                        ClassicUO.Network.NetClientExt.SpecialCombatInputType.Release,
+                        ClassicUO.Network.NetClientExt.MouseButton.Left,
+                        directionPoint
+                    );
+                }
             }
 
             // Direction tracking for ManualArm mode (threshold-based updates)
