@@ -47,6 +47,14 @@ namespace ClassicUO.Game.Scenes
         {
             if ((_rightMousePressed || _continueRunning) && _world.InGame) // && !Pathfinder.AutoWalking)
             {
+                // In war mode, do not move from right-mouse hold (avoids accidental movement while fighting)
+                if (ProfileManager.CurrentProfile.DisableRightMouseMoveInWarMode
+                    && _world.Player != null
+                    && _world.Player.InWarMode)
+                {
+                    return false;
+                }
+
                 if (_world.Player.Pathfinder.AutoWalking)
                 {
                     _world.Player.Pathfinder.StopAutoWalk();

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Text.Json;
 
 namespace ClassicUO.Configuration
@@ -161,6 +161,7 @@ namespace ClassicUO.Configuration
             public string IgnoreStaminaCheck { get; set; } = "Disable stamina check for movement";
             public string DisableGrayEnemies { get; set; } = "Don't make last target/enemies gray";
             public string DisableDismountWarmode { get; set; } = "Prevent dismounting in combat";
+            public string DisableRightMouseMoveWarmode { get; set; } = "Disable move with right mouse in war mode";
             #endregion
 
             #region General->Gumps

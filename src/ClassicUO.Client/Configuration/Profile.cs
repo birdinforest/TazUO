@@ -680,6 +680,8 @@ namespace ClassicUO.Configuration
         public ushort PostProcessingType { get; set; }
         public bool DisableHotkeys { get; set; }
         public bool DisableDismountInWarMode { get; set; }
+        /// <summary>When true, holding right mouse in war mode does not move the character.</summary>
+        public bool DisableRightMouseMoveInWarMode { get; set; } = true;
         public bool EnableASyncMapLoading { get; set; } = true;
 
         [JsonIgnore]

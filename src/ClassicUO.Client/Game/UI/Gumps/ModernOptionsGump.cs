@@ -1,4 +1,4 @@
-﻿using ClassicUO.Assets;
+using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
@@ -3344,6 +3344,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             content.BlankLine();
             content.AddToRight(new CheckboxWithLabel(lang.GetGeneral.DisableDismountWarmode, 0, profile.DisableDismountInWarMode, (b) => profile.DisableDismountInWarMode = b), true, page);
+            content.AddToRight(new CheckboxWithLabel(lang.GetGeneral.DisableRightMouseMoveWarmode, 0, profile.DisableRightMouseMoveInWarMode, (b) => profile.DisableRightMouseMoveInWarMode = b), true, page);
             #endregion
 
             #region Misc
