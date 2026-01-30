@@ -3,6 +3,7 @@
 using System;
 using System.Linq;
 using ClassicUO.Configuration;
+using ClassicUO.Game.Combat;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.Managers;
@@ -47,6 +48,12 @@ namespace ClassicUO.Game.Scenes
         {
             if ((_rightMousePressed || _continueRunning) && _world.InGame) // && !Pathfinder.AutoWalking)
             {
+                // Block movement if FastStep is active
+                if (SpecialCombatOperationManager.Instance.IsOperationBlockingMovement("FastStep"))
+                {
+                    return false;
+                }
+
                 // In war mode, do not move from right-mouse hold (avoids accidental movement while fighting)
                 if (ProfileManager.CurrentProfile.DisableRightMouseMoveInWarMode
                     && _world.Player != null
@@ -349,6 +356,12 @@ namespace ClassicUO.Game.Scenes
         private bool MoveCharByController()
         {
             if(ProfileManager.CurrentProfile == null || !ProfileManager.CurrentProfile.ControllerEnabled) return false;
+
+            // Block movement if FastStep is active
+            if (SpecialCombatOperationManager.Instance.IsOperationBlockingMovement("FastStep"))
+            {
+                return false;
+            }
 
             const float THRESHOLD = 0.3f;
 
@@ -1249,11 +1262,43 @@ namespace ClassicUO.Game.Scenes
                 return false;
             }
 
+            // Check for FastStep input (direction + right mouse in war mode)
+            if (_world.Player != null && _world.Player.InWarMode)
+            {
+                Direction dir = GetCurrentDirectionFromKeyboard();
+                if (dir != Direction.NONE)
+                {
+                    // Trigger FastStep - send input to server
+                    Point3D cursorPos = GetAimDirectionPoint();
+                    AsyncNetClient.Socket.Send_SpecialCombatInput(
+                        ClassicUO.Network.NetClientExt.SpecialCombatInputType.Press,
+                        ClassicUO.Network.NetClientExt.MouseButton.Right,
+                        cursorPos,
+                        dir  // Pass direction for FastStep
+                    );
+                    return true;
+                }
+            }
+
             _rightMousePressed = true;
             _continueRunning = false;
             StopFollowing();
 
             return true;
+        }
+
+        /// <summary>
+        /// Get current direction from keyboard state (for FastStep)
+        /// </summary>
+        private Direction GetCurrentDirectionFromKeyboard()
+        {
+            // _flags[0] = Up, _flags[1] = Left, _flags[2] = Down, _flags[3] = Right
+            return DirectionHelper.DirectionFromKeyboardArrows(
+                _flags[0],  // up
+                _flags[2],  // down
+                _flags[1],  // left
+                _flags[3]   // right
+            );
         }
 
         private bool OnRightMouseUp()

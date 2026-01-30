@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 
 using ClassicUO.Assets;
@@ -944,16 +944,22 @@ namespace ClassicUO.Game.Scenes
 
             if (!MoveCharacterByMouseInput() && !currentProfile.DisableArrowBtn && !MoveCharByController())
             {
-                Direction dir = DirectionHelper.DirectionFromKeyboardArrows(
-                    _flags[0],
-                    _flags[2],
-                    _flags[1],
-                    _flags[3]
-                );
+                // Check if FastStep is blocking movement
+                bool fastStepBlocking = SpecialCombatOperationManager.Instance.IsOperationBlockingMovement("FastStep");
 
-                if (_world.InGame && !_world.Player.Pathfinder.AutoWalking && dir != Direction.NONE)
+                if (!fastStepBlocking)
                 {
-                    _world.Player.Walk(dir, currentProfile.AlwaysRun);
+                    Direction dir = DirectionHelper.DirectionFromKeyboardArrows(
+                        _flags[0],
+                        _flags[2],
+                        _flags[1],
+                        _flags[3]
+                    );
+
+                    if (_world.InGame && !_world.Player.Pathfinder.AutoWalking && dir != Direction.NONE)
+                    {
+                        _world.Player.Walk(dir, currentProfile.AlwaysRun);
+                    }
                 }
             }
 

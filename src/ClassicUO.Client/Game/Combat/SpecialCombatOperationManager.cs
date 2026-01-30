@@ -40,6 +40,7 @@ namespace ClassicUO.Game.Combat
             // Register default operations explicitly
             // This is more reliable than relying on static constructors
             RegisterOperationFactory("ChargedShot", world => new ChargedShotOperation(world));
+            RegisterOperationFactory("FastStep", world => new FastStepOperation(world));
 
             // Others ...
         }
@@ -145,6 +146,22 @@ namespace ClassicUO.Game.Combat
         public bool HasAnyActiveOperation() => _activeOperations.Count > 0;
         public SpecialCombatOperation GetOperation(string operationId) => _activeOperations.GetValueOrDefault(operationId);
         public IReadOnlyDictionary<string, SpecialCombatOperation> GetAllActiveOperations() => _activeOperations;
+
+        /// <summary>
+        /// Check if a specific operation is in a movement-blocking state (e.g., FastStep during Active state).
+        /// Used to disable normal keyboard movement during special combat operations.
+        /// </summary>
+        public bool IsOperationBlockingMovement(string operationId)
+        {
+            if (!_activeOperations.TryGetValue(operationId, out SpecialCombatOperation operation))
+                return false;
+
+            // FastStep blocks movement during Ready, Active, and Completing states
+            var state = operation.Info.CurrentState;
+            return state == SpecialCombatOperationState.Ready ||
+                   state == SpecialCombatOperationState.Active ||
+                   state == SpecialCombatOperationState.Completing;
+        }
 
         // Direction tracking for ManualArm mode
         public bool IsTrackingDirection => _isTrackingDirection;

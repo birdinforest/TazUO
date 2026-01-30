@@ -4738,20 +4738,22 @@ namespace ClassicUO.Network
         /// <summary>
         /// Sends generic special combat input to server with cursor world position.
         /// Server decides what operation (if any) this triggers based on context.
-        /// Packet 0xBF subcommand 0x0033 (extended to 14 bytes for cursor position)
+        /// Packet 0xBF subcommand 0x0033 (extended to 14 bytes for cursor position + direction)
         /// </summary>
         /// <param name="inputType">Type of input (Press, Release, Cancel)</param>
         /// <param name="mouseButton">Which mouse button (Left, Right, Middle)</param>
         /// <param name="cursorWorldPosition">World position of cursor at time of input</param>
+        /// <param name="direction">Direction for FastStep (8-way, NONE if not applicable)</param>
         public static void Send_SpecialCombatInput(
             this AsyncNetClient socket,
             SpecialCombatInputType inputType,
             MouseButton mouseButton = MouseButton.Left,
-            Point3D cursorWorldPosition = default)
+            Point3D cursorWorldPosition = default,
+            Direction direction = Direction.NONE)
         {
             const byte ID = 0xBF; // Extended command packet
 
-            var writer = new StackDataWriter(14); // Updated to 14-byte packet for cursor position
+            var writer = new StackDataWriter(14); // Updated to 14-byte packet for cursor position + direction
             writer.WriteUInt8(ID);                                     // Packet ID: 0xBF
             writer.WriteUInt16BE(14);                                  // Length: 14 bytes
             writer.WriteUInt16BE(0x0033);                              // Subcommand: 0x0033 (Special Combat Input)
@@ -4760,12 +4762,13 @@ namespace ClassicUO.Network
             writer.WriteUInt16BE((ushort)cursorWorldPosition.X);       // Cursor X (world coord)
             writer.WriteUInt16BE((ushort)cursorWorldPosition.Y);       // Cursor Y (world coord)
             writer.WriteInt8((sbyte)cursorWorldPosition.Z);           // Cursor Z (world coord)
-            writer.WriteUInt16BE(0);                                   // Reserved
+            writer.WriteUInt8((byte)direction);                        // Direction (for FastStep)
+            writer.WriteUInt8(0);                                      // Reserved
 
             socket.Send(writer.BufferWritten);
             writer.Dispose();
 
-            Console.WriteLine($"[SpecialCombat] Sent input: {inputType} {mouseButton} @ {cursorWorldPosition}");
+            Console.WriteLine($"[SpecialCombat] Sent input: {inputType} {mouseButton} @ {cursorWorldPosition} dir={direction}");
         }
     }
 }
