@@ -10,6 +10,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers;
 using ClassicUO.Assets;
 using ClassicUO.IO;
 using ClassicUO.Network.Encryption;
@@ -238,6 +239,11 @@ namespace ClassicUO.Game.Map
             if (x < 0 || y < 0)
             {
                 return -125;
+            }
+
+            if (DynamicDungeonLandOverrideManager.Instance.TryGetOverride(Index, x, y, out _, out sbyte overrideZ))
+            {
+                return overrideZ;
             }
 
             ref IndexMap blockIndex = ref GetIndex(x >> 3, y >> 3);

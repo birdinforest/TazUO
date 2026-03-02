@@ -5134,12 +5134,38 @@ sealed class PacketHandlers
             case 0x0100: // Dynamic Dungeon — LandTileUpdate
                 HandleLandTileUpdate(world, ref p);
                 break;
+            case 0x0101: // Dynamic Dungeon — BeginLandOverrideSession
+                HandleBeginLandOverrideSession(world, ref p);
+                break;
+            case 0x0102: // Dynamic Dungeon — ClearLandOverrideSession
+                HandleClearLandOverrideSession(world, ref p);
+                break;
 
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
 
                 break;
         }
+    }
+
+    private static void HandleBeginLandOverrideSession(World world, ref StackDataReader p)
+    {
+        int sessionId = p.ReadInt32BE();
+        int mapId = p.ReadUInt8();
+        int originX = p.ReadInt16BE();
+        int originY = p.ReadInt16BE();
+        int width = p.ReadUInt16BE();
+        int height = p.ReadUInt16BE();
+
+        DynamicDungeonLandOverrideManager.Instance.BeginSession(sessionId, mapId, originX, originY, width, height);
+        Log.Debug($"[DynamicDungeon] BeginLandOverrideSession: session={sessionId}, map={mapId}, origin=({originX},{originY}), size={width}x{height}");
+    }
+
+    private static void HandleClearLandOverrideSession(World world, ref StackDataReader p)
+    {
+        int sessionId = p.ReadInt32BE();
+        bool cleared = DynamicDungeonLandOverrideManager.Instance.ClearSession(sessionId);
+        Log.Debug($"[DynamicDungeon] ClearLandOverrideSession: session={sessionId}, cleared={cleared}");
     }
 
     /// <summary>
@@ -5159,15 +5185,25 @@ sealed class PacketHandlers
         Log.Debug($"[HandleLandTileUpdate] Received: count={count}");
 
         int updated = 0;
+        int accepted = 0;
+        int skippedOutOfBounds = 0;
         int skippedNoChunk = 0;
         int skippedNoLand = 0;
 
         for (int i = 0; i < count; i++)
         {
-            short wx = p.ReadInt16BE();
-            short wy = p.ReadInt16BE();
+            int wx = p.ReadInt16BE();
+            int wy = p.ReadInt16BE();
             ushort tileId = p.ReadUInt16BE();
             sbyte z = (sbyte)p.ReadUInt8();
+
+            if (!DynamicDungeonLandOverrideManager.Instance.StoreOverride(world.Map.Index, wx, wy, tileId, z))
+            {
+                skippedOutOfBounds++;
+                continue;
+            }
+
+            accepted++;
 
             // load=false: skip if the chunk is not in memory.
             GameObject head = world.Map.GetTile(wx, wy, false);
@@ -5202,7 +5238,7 @@ sealed class PacketHandlers
                 skippedNoLand++;
         }
 
-        Log.Debug($"[HandleLandTileUpdate] Done: updated={updated}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
+        Log.Debug($"[HandleLandTileUpdate] Done: accepted={accepted}, updated={updated}, skipped(out of bounds/no active session)={skippedOutOfBounds}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
     }
 
     /// <summary>
