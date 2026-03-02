@@ -5131,11 +5131,78 @@ sealed class PacketHandlers
                 }
                 break;
 
+            case 0x0100: // Dynamic Dungeon — LandTileUpdate
+                HandleLandTileUpdate(world, ref p);
+                break;
+
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
 
                 break;
         }
+    }
+
+    /// <summary>
+    /// Handles land tile override packet (0xBF subcommand 0x0100).
+    /// Updates cached Land objects in already-loaded chunks so dynamically generated
+    /// dungeon floors are visible without a client restart.
+    /// </summary>
+    private static void HandleLandTileUpdate(World world, ref StackDataReader p)
+    {
+        if (world?.Map == null)
+        {
+            Log.Warn("[HandleLandTileUpdate] world or Map is null — ignoring packet");
+            return;
+        }
+
+        ushort count = p.ReadUInt16BE();
+        Log.Debug($"[HandleLandTileUpdate] Received: count={count}");
+
+        int updated = 0;
+        int skippedNoChunk = 0;
+        int skippedNoLand = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            short wx = p.ReadInt16BE();
+            short wy = p.ReadInt16BE();
+            ushort tileId = p.ReadUInt16BE();
+            sbyte z = (sbyte)p.ReadUInt8();
+
+            // load=false: skip if the chunk is not in memory.
+            GameObject head = world.Map.GetTile(wx, wy, false);
+
+            if (head == null)
+            {
+                skippedNoChunk++;
+                continue;
+            }
+
+            // Walk the linked list to find the Land object (always lowest Z order).
+            bool found = false;
+            GameObject obj = head;
+            while (obj != null)
+            {
+                if (obj is Land land)
+                {
+                    land.Graphic = tileId;
+                    land.Z = z;
+                    // Recalculate isometric Z-corner interpolation from neighbouring tiles.
+                    land.ApplyStretch(world.Map, land.X, land.Y, z);
+                    land.UpdateScreenPosition();
+                    updated++;
+                    found = true;
+                    break;
+                }
+
+                obj = obj.TNext;
+            }
+
+            if (!found)
+                skippedNoLand++;
+        }
+
+        Log.Debug($"[HandleLandTileUpdate] Done: updated={updated}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
     }
 
     /// <summary>
