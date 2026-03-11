@@ -5195,12 +5195,14 @@ sealed class PacketHandlers
             return;
         }
 
+        DynamicDungeonLandOverrideManager manager = DynamicDungeonLandOverrideManager.Instance;
         ushort count = p.ReadUInt16BE();
         Log.Debug($"[HandleLandTileUpdate] Received: count={count}");
 
         int updated = 0;
         int accepted = 0;
         int skippedOutOfBounds = 0;
+        int skippedWrongMap = 0;
         int skippedNoChunk = 0;
         int skippedNoLand = 0;
 
@@ -5211,13 +5213,21 @@ sealed class PacketHandlers
             ushort tileId = p.ReadUInt16BE();
             sbyte z = (sbyte)p.ReadUInt8();
 
-            if (!DynamicDungeonLandOverrideManager.Instance.StoreOverride(world.Map.Index, wx, wy, tileId, z))
+            if (!manager.StoreOverride(wx, wy, tileId, z))
             {
                 skippedOutOfBounds++;
                 continue;
             }
 
             accepted++;
+            manager.MarkDirtyChunkForWorldTile(wx, wy);
+
+            // If client is not on the session map yet, keep override for later and skip direct tile mutation.
+            if (!manager.IsSessionMap(world.Map.Index))
+            {
+                skippedWrongMap++;
+                continue;
+            }
 
             // load=false: skip if the chunk is not in memory.
             GameObject head = world.Map.GetTile(wx, wy, false);
@@ -5252,7 +5262,7 @@ sealed class PacketHandlers
                 skippedNoLand++;
         }
 
-        Log.Debug($"[HandleLandTileUpdate] Done: accepted={accepted}, updated={updated}, skipped(out of bounds/no active session)={skippedOutOfBounds}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
+        Log.Debug($"[HandleLandTileUpdate] Done: accepted={accepted}, updated={updated}, skipped(out of bounds/no active session)={skippedOutOfBounds}, skipped(wrong map)={skippedWrongMap}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
     }
 
     /// <summary>
