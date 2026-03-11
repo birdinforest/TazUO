@@ -61,6 +61,26 @@ namespace ClassicUO.Game.Managers
             }
         }
 
+        /// <summary>
+        /// Unconditionally clears all active session state and cached overrides.
+        /// Called when the server sends 0x0103 ClearAllLandOverrideSessions to guarantee
+        /// stale floors are removed regardless of session ID or player location.
+        /// </summary>
+        public void ClearAll()
+        {
+            lock (_sync)
+            {
+                _hasSession = false;
+                _sessionId = 0;
+                _mapId = 0;
+                _originX = 0;
+                _originY = 0;
+                _width = 0;
+                _height = 0;
+                _overrides.Clear();
+            }
+        }
+
         public bool StoreOverride(int mapId, int x, int y, ushort tileId, sbyte z)
         {
             lock (_sync)

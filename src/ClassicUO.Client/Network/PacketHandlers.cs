@@ -5140,6 +5140,9 @@ sealed class PacketHandlers
             case 0x0102: // Dynamic Dungeon — ClearLandOverrideSession
                 HandleClearLandOverrideSession(world, ref p);
                 break;
+            case 0x0103: // Dynamic Dungeon — ClearAllLandOverrideSessions
+                HandleClearAllLandOverrideSessions(world, ref p);
+                break;
 
             default:
                 Log.Warn($"Unhandled 0xBF - sub: {cmd.ToHex()}");
@@ -5166,6 +5169,17 @@ sealed class PacketHandlers
         int sessionId = p.ReadInt32BE();
         bool cleared = DynamicDungeonLandOverrideManager.Instance.ClearSession(sessionId);
         Log.Debug($"[DynamicDungeon] ClearLandOverrideSession: session={sessionId}, cleared={cleared}");
+    }
+
+    /// <summary>
+    /// Handles 0x0103 ClearAllLandOverrideSessions.
+    /// Unconditionally clears all dynamic dungeon floor overrides regardless of session ID.
+    /// Sent by the server to clients that were out-of-range or offline when [ClearDungeon] ran.
+    /// </summary>
+    private static void HandleClearAllLandOverrideSessions(World world, ref StackDataReader p)
+    {
+        DynamicDungeonLandOverrideManager.Instance.ClearAll();
+        Log.Debug("[DynamicDungeon] ClearAllLandOverrideSessions: all session overrides cleared");
     }
 
     /// <summary>
