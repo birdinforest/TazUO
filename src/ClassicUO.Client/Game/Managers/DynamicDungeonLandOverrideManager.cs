@@ -25,6 +25,7 @@ namespace ClassicUO.Game.Managers
         private readonly Queue<long> _dirtyChunkQueue = new Queue<long>();
 
         private bool _hasSession;
+        private uint _activeEpoch;
         private int _sessionId;
         private int _mapId;
         private int _originX;
@@ -36,10 +37,17 @@ namespace ClassicUO.Game.Managers
         {
         }
 
-        public void BeginSession(int sessionId, int mapId, int originX, int originY, int width, int height)
+        /// <summary>
+        /// Begin a session. Accepted only if packetEpoch >= _activeEpoch (new or same epoch).
+        /// </summary>
+        public bool BeginSession(uint packetEpoch, int sessionId, int mapId, int originX, int originY, int width, int height)
         {
             lock (_sync)
             {
+                if (packetEpoch < _activeEpoch)
+                    return false;
+
+                _activeEpoch = packetEpoch;
                 _hasSession = width > 0 && height > 0;
                 _sessionId = sessionId;
                 _mapId = mapId;
@@ -50,14 +58,18 @@ namespace ClassicUO.Game.Managers
                 _overrides.Clear();
                 _dirtyChunks.Clear();
                 _dirtyChunkQueue.Clear();
+                return true;
             }
         }
 
-        public bool ClearSession(int sessionId)
+        /// <summary>
+        /// Clear session. Applied only when packetEpoch and sessionId match active state.
+        /// </summary>
+        public bool ClearSession(uint packetEpoch, int sessionId)
         {
             lock (_sync)
             {
-                if (!_hasSession || sessionId != _sessionId)
+                if (!_hasSession || packetEpoch != _activeEpoch || sessionId != _sessionId)
                     return false;
 
                 _hasSession = false;
@@ -69,14 +81,17 @@ namespace ClassicUO.Game.Managers
         }
 
         /// <summary>
-        /// Unconditionally clears all active session state and cached overrides.
-        /// Called when the server sends 0x0103 ClearAllLandOverrideSessions to guarantee
-        /// stale floors are removed regardless of session ID or player location.
+        /// Clear all sessions. Applied when packetEpoch >= _activeEpoch; then _activeEpoch is set
+        /// so older packets are rejected.
         /// </summary>
-        public void ClearAll()
+        public void ClearAll(uint packetEpoch)
         {
             lock (_sync)
             {
+                if (packetEpoch < _activeEpoch)
+                    return;
+
+                _activeEpoch = packetEpoch;
                 _hasSession = false;
                 _sessionId = 0;
                 _mapId = 0;
@@ -90,11 +105,14 @@ namespace ClassicUO.Game.Managers
             }
         }
 
-        public bool StoreOverride(int x, int y, ushort tileId, sbyte z)
+        /// <summary>
+        /// Store a land override. Accepted only when packetEpoch == _activeEpoch and sessionId matches.
+        /// </summary>
+        public bool StoreOverride(uint packetEpoch, int sessionId, int x, int y, ushort tileId, sbyte z)
         {
             lock (_sync)
             {
-                if (!IsWithinSessionBoundsNoLock(x, y))
+                if (packetEpoch != _activeEpoch || sessionId != _sessionId || !IsWithinSessionBoundsNoLock(x, y))
                     return false;
 
                 _overrides[ComposeKey(x, y)] = new DynamicDungeonLandOverride(tileId, z);

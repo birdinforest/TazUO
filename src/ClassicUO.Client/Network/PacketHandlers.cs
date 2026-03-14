@@ -5153,6 +5153,7 @@ sealed class PacketHandlers
 
     private static void HandleBeginLandOverrideSession(World world, ref StackDataReader p)
     {
+        uint epoch = p.ReadUInt32BE();
         int sessionId = p.ReadInt32BE();
         int mapId = p.ReadUInt8();
         int originX = p.ReadInt16BE();
@@ -5160,26 +5161,27 @@ sealed class PacketHandlers
         int width = p.ReadUInt16BE();
         int height = p.ReadUInt16BE();
 
-        DynamicDungeonLandOverrideManager.Instance.BeginSession(sessionId, mapId, originX, originY, width, height);
-        Log.Debug($"[DynamicDungeon] BeginLandOverrideSession: session={sessionId}, map={mapId}, origin=({originX},{originY}), size={width}x{height}");
+        bool accepted = DynamicDungeonLandOverrideManager.Instance.BeginSession(epoch, sessionId, mapId, originX, originY, width, height);
+        Log.Debug($"[DynamicDungeon] BeginLandOverrideSession: epoch={epoch}, session={sessionId}, map={mapId}, origin=({originX},{originY}), size={width}x{height}, accepted={accepted}");
     }
 
     private static void HandleClearLandOverrideSession(World world, ref StackDataReader p)
     {
+        uint epoch = p.ReadUInt32BE();
         int sessionId = p.ReadInt32BE();
-        bool cleared = DynamicDungeonLandOverrideManager.Instance.ClearSession(sessionId);
-        Log.Debug($"[DynamicDungeon] ClearLandOverrideSession: session={sessionId}, cleared={cleared}");
+        bool cleared = DynamicDungeonLandOverrideManager.Instance.ClearSession(epoch, sessionId);
+        Log.Debug($"[DynamicDungeon] ClearLandOverrideSession: epoch={epoch}, session={sessionId}, cleared={cleared}");
     }
 
     /// <summary>
     /// Handles 0x0103 ClearAllLandOverrideSessions.
-    /// Unconditionally clears all dynamic dungeon floor overrides regardless of session ID.
-    /// Sent by the server to clients that were out-of-range or offline when [ClearDungeon] ran.
+    /// Clears all dynamic dungeon floor overrides when packetEpoch >= active epoch.
     /// </summary>
     private static void HandleClearAllLandOverrideSessions(World world, ref StackDataReader p)
     {
-        DynamicDungeonLandOverrideManager.Instance.ClearAll();
-        Log.Debug("[DynamicDungeon] ClearAllLandOverrideSessions: all session overrides cleared");
+        uint epoch = p.ReadUInt32BE();
+        DynamicDungeonLandOverrideManager.Instance.ClearAll(epoch);
+        Log.Debug($"[DynamicDungeon] ClearAllLandOverrideSessions: epoch={epoch}");
     }
 
     /// <summary>
@@ -5196,8 +5198,10 @@ sealed class PacketHandlers
         }
 
         DynamicDungeonLandOverrideManager manager = DynamicDungeonLandOverrideManager.Instance;
+        uint epoch = p.ReadUInt32BE();
+        int sessionId = p.ReadInt32BE();
         ushort count = p.ReadUInt16BE();
-        Log.Debug($"[HandleLandTileUpdate] Received: count={count}");
+        Log.Debug($"[HandleLandTileUpdate] Received: epoch={epoch}, session={sessionId}, count={count}");
 
         int updated = 0;
         int accepted = 0;
@@ -5213,7 +5217,7 @@ sealed class PacketHandlers
             ushort tileId = p.ReadUInt16BE();
             sbyte z = (sbyte)p.ReadUInt8();
 
-            if (!manager.StoreOverride(wx, wy, tileId, z))
+            if (!manager.StoreOverride(epoch, sessionId, wx, wy, tileId, z))
             {
                 skippedOutOfBounds++;
                 continue;
