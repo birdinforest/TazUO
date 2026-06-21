@@ -137,6 +137,33 @@ namespace ClassicUO.Game.Managers
             Register("version", s => { UIManager.Add(new VersionHistory(_world)); });
             Register("rain", s => { _world.Weather.Generate(WeatherType.WT_RAIN, 30, 75); });
 
+            Register("puddle", s =>
+            {
+                if (_world.Player == null)
+                {
+                    return;
+                }
+
+                if (s.Length > 1 && s[1] == "clear")
+                {
+                    PuddleManager.Clear();
+                    return;
+                }
+
+                float radius = 44f;
+                if (s.Length > 1 && float.TryParse(s[1], out float parsedRadius))
+                {
+                    radius = parsedRadius;
+                }
+
+                PuddleManager.Add(
+                    _world.Player.X,
+                    _world.Player.Y,
+                    _world.Player.Z,
+                    radius
+                );
+            });
+
             Register("marktile", s =>
             {
                 if (s.Length > 1 && s[1] == "-r")

@@ -82,6 +82,7 @@ namespace ClassicUO.Game.Scenes
         private bool _useObjectHandles;
         private RenderTarget2D _world_render_target,
             _light_render_target;
+        private PuddleRenderer _puddleRenderer;
         private AnimatedStaticsManager _animatedStaticsManager;
 
         private readonly World _world;
@@ -465,11 +466,14 @@ namespace ClassicUO.Game.Scenes
             AsyncNetClient.Socket.Disconnect();
             _light_render_target?.Dispose();
             _world_render_target?.Dispose();
+            _puddleRenderer?.Dispose();
+            _puddleRenderer = null;
             _xbr?.Dispose();
             _xbr = null;
 
             _world.CommandManager.UnRegisterAll();
             _world.Weather.Reset();
+            PuddleManager.Clear();
             SkillProgressBar.QueManager.Reset();
             UIManager.Clear();
             _world.Clear();
@@ -1198,6 +1202,9 @@ namespace ClassicUO.Game.Scenes
             Matrix.Multiply(ref matTrans1, ref matTrans2, out Matrix temp1);
             Matrix.Multiply(ref temp1, ref matTrans3, out Matrix worldRTMatrix);
 
+            EnsurePuddleRenderer(gd);
+            _puddleRenderer?.CaptureReflection(batcher, gd, _world_render_target);
+
             DrawWorld(batcher, ref worldRTMatrix);
 
             can_draw_lights = PrepareLightsRendering(batcher, ref worldRTMatrix);
@@ -1305,6 +1312,15 @@ namespace ClassicUO.Game.Scenes
             }
 
             batcher.End();
+
+            _puddleRenderer?.Draw(
+                batcher.GraphicsDevice,
+                PuddleManager.GetRegions(),
+                ref matrix,
+                _world_render_target.Width,
+                _world_render_target.Height,
+                (float)(Time.Ticks / 1000.0)
+            );
 
             // Draw overheads and selection into the render target (for consistent scaling)
             // Use the same matrix transform as game objects to ensure coordinate system consistency
@@ -1501,6 +1517,14 @@ namespace ClassicUO.Game.Scenes
                 selectionRect.Height,
                 selectionHue
             );
+        }
+
+        private void EnsurePuddleRenderer(GraphicsDevice gd)
+        {
+            if (_puddleRenderer == null)
+            {
+                _puddleRenderer = new PuddleRenderer(gd);
+            }
         }
 
         private void EnsureRenderTargets(GraphicsDevice gd)

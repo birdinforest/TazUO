@@ -7,9 +7,19 @@ set -e
 
 SCRIPT_DIR="$(dirname "$0")"
 PROJECT_ROOT="."
+
+# Britain Knights
 SETTINGS_PATH="/Users/forrrest/projects/UO-BritainKnights/Game/settings.json"
+
 # SETTINGS_PATH="/Users/forrrest/projects/OpenUO/settings/settings_osi.json"
+# SETTINGS_PATH="/Users/forrrest/projects/OpenUO/settings/settings_moongate.json"
 # SETTINGS_PATH="/Users/forrrest/projects/UO-Adventures-Dev/ClassicUO/settings.json"
+
+# Memento online
+# SETTINGS_PATH="/Users/forrrest/TazUO-Launcher.osx-arm64/Profiles/Settings/934d1d2d-aec8-47ac-b7be-a669b54fc5f0.json"
+
+# Memento local
+SETTINGS_PATH="/Users/forrrest/TazUO-Launcher.osx-arm64/Profiles/Settings/a730bff5-6701-46e7-b054-22d13c0f92e7.json"
 
 # Debug flags
 DEBUG_GUMP_LOADING="${DEBUG_GUMP_LOADING:-false}"
