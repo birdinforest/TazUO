@@ -48,8 +48,20 @@ namespace ClassicUO.Renderer
             1.0f
         );
         private readonly RasterizerState _rasterizerState;
+        private readonly RasterizerState _rasterizerStateReflect;
         private SamplerState _sampler;
         private bool _started;
+        public bool ReflectionMode { get; set; }
+        /// <summary>
+        /// Distance in pixels from the sprite texture bottom (destY + H) up to the tile ground
+        /// anchor (RealScreenPosition.Y). Set per draw call before AddSprite in reflection pass.
+        /// </summary>
+        public float ReflectionPivotOffset { get; set; }
+        /// <summary>
+        /// When set (e.g. by a mount body draw), rider/equipment reflection slices mirror around
+        /// this screen Y instead of their own tile anchor.
+        /// </summary>
+        public float? ReflectionFeetOverride { get; set; }
         private DepthStencilState _stencil;
         private Matrix _transformMatrix;
         private readonly DynamicVertexBuffer _vertexBuffer;
@@ -73,6 +85,16 @@ namespace ClassicUO.Renderer
             _rasterizerState = new RasterizerState
             {
                 CullMode = CullMode.CullCounterClockwiseFace,
+                FillMode = FillMode.Solid,
+                DepthBias = 0,
+                MultiSampleAntiAlias = true,
+                ScissorTestEnable = true,
+                SlopeScaleDepthBias = 0,
+            };
+
+            _rasterizerStateReflect = new RasterizerState
+            {
+                CullMode = CullMode.None,
                 FillMode = FillMode.Solid,
                 DepthBias = 0,
                 MultiSampleAntiAlias = true,
@@ -113,6 +135,7 @@ namespace ClassicUO.Renderer
             _basicUOEffect?.Dispose();
             _vertexBuffer.Dispose();
             _indexBuffer.Dispose();
+            _rasterizerStateReflect?.Dispose();
         }
 
 
@@ -1132,6 +1155,13 @@ namespace ClassicUO.Renderer
 
             EnsureSize();
 
+            if (ReflectionMode)
+            {
+                // Mirror around feetScreenY: destY + H - ReflectionPivotOffset.
+                destinationY += 2f * destinationH - ReflectionPivotOffset;
+                destinationH = -destinationH;
+            }
+
             SetVertex
             (
                 ref _vertexInfo[_numSprites],
@@ -1296,7 +1326,7 @@ namespace ClassicUO.Renderer
         {
             GraphicsDevice.BlendState = _blendState;
             GraphicsDevice.DepthStencilState = _stencil;
-            GraphicsDevice.RasterizerState = _rasterizerState;
+            GraphicsDevice.RasterizerState = ReflectionMode ? _rasterizerStateReflect : _rasterizerState;
             GraphicsDevice.SamplerStates[0] = _sampler;
             GraphicsDevice.SamplerStates[1] = SamplerState.PointClamp;
             GraphicsDevice.SamplerStates[2] = SamplerState.PointClamp;

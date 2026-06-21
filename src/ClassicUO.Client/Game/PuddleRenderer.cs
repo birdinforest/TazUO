@@ -38,43 +38,34 @@ namespace ClassicUO.Game
             _ib.SetData(BuildIndexData(MAX_PUDDLES));
         }
 
-        public void CaptureReflection(UltimaBatcher2D batcher, GraphicsDevice gd, RenderTarget2D worldRT)
+        /// <summary>
+        /// Switches the active render target to ReflectionRT and clears it to transparent.
+        /// Call before rendering the object-space reflection pass.
+        /// </summary>
+        public void BeginReflectionTarget(GraphicsDevice gd, int rtW, int rtH)
         {
-            if (worldRT == null || worldRT.IsDisposed)
-            {
-                return;
-            }
-
-            int w = worldRT.Width;
-            int h = worldRT.Height;
-
             if (
                 ReflectionRT == null
                 || ReflectionRT.IsDisposed
-                || ReflectionRT.Width != w
-                || ReflectionRT.Height != h
+                || ReflectionRT.Width != rtW
+                || ReflectionRT.Height != rtH
             )
             {
                 ReflectionRT?.Dispose();
-                ReflectionRT = new RenderTarget2D(gd, w, h, false, SurfaceFormat.Color, DepthFormat.None);
+                ReflectionRT = new RenderTarget2D(gd, rtW, rtH, false, SurfaceFormat.Color, DepthFormat.None);
             }
 
-            RenderTargetBinding[] prev = gd.GetRenderTargets();
             gd.SetRenderTarget(ReflectionRT);
-            gd.Clear(Color.Black);
+            gd.Clear(Color.Transparent);
+        }
 
-            batcher.Begin();
-            batcher.Draw(worldRT, Vector2.Zero, new Vector3(0, 0, 1));
-            batcher.End();
-
-            if (prev != null && prev.Length > 0)
-            {
-                gd.SetRenderTargets(prev);
-            }
-            else
-            {
-                gd.SetRenderTarget(null);
-            }
+        /// <summary>
+        /// Releases the ReflectionRT render target binding.
+        /// GameScene restores _world_render_target immediately after.
+        /// </summary>
+        public void EndReflectionTarget(GraphicsDevice gd)
+        {
+            gd.SetRenderTarget(null);
         }
 
         public void Draw(
@@ -135,6 +126,10 @@ namespace ClassicUO.Game
                 _effect.PuddleRadiusU.SetValue(hw / rtW);
                 _effect.PuddleRadiusV.SetValue(hh / rtH);
                 _effect.Alpha.SetValue(r.Alpha);
+                _effect.ReflectStrength.SetValue(r.ReflectStrength);
+                _effect.WaveStrength.SetValue(r.WaveStrength);
+                _effect.WaveSpeed.SetValue(r.WaveSpeed);
+                _effect.WaveScale.SetValue(r.WaveScale);
 
                 foreach (EffectPass pass in _effect.CurrentTechnique.Passes)
                 {

@@ -150,10 +150,37 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
+                // -puddle [radius] [reflectStrength] [waveStrength] [waveSpeed] [waveScale]
+                // e.g.  -puddle 60 0.6 0.02 1.0 18
                 float radius = 44f;
+                float reflectStrength = 0.45f;
+                float waveStrength = 0.018f;
+                float waveSpeed = 1.0f;
+                float waveScale = 18.0f;
+
                 if (s.Length > 1 && float.TryParse(s[1], out float parsedRadius))
                 {
                     radius = parsedRadius;
+                }
+
+                if (s.Length > 2 && float.TryParse(s[2], out float parsedReflect))
+                {
+                    reflectStrength = Math.Clamp(parsedReflect, 0f, 1f);
+                }
+
+                if (s.Length > 3 && float.TryParse(s[3], out float parsedWaveStrength))
+                {
+                    waveStrength = Math.Max(0f, parsedWaveStrength);
+                }
+
+                if (s.Length > 4 && float.TryParse(s[4], out float parsedWaveSpeed))
+                {
+                    waveSpeed = Math.Max(0.001f, parsedWaveSpeed);
+                }
+
+                if (s.Length > 5 && float.TryParse(s[5], out float parsedWaveScale))
+                {
+                    waveScale = Math.Max(1f, parsedWaveScale);
                 }
 
                 PuddleRegion region = PuddleManager.Add(
@@ -162,10 +189,14 @@ namespace ClassicUO.Game.Managers
                     _world.Player.Z,
                     radius
                 );
+                region.ReflectStrength = reflectStrength;
+                region.WaveStrength = waveStrength;
+                region.WaveSpeed = waveSpeed;
+                region.WaveScale = waveScale;
 
                 GameActions.Print(
                     _world,
-                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0}. Use -puddle clear to remove.",
+                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0} reflect={reflectStrength:0.00} wave={waveStrength:0.000} speed={waveSpeed:0.0} scale={waveScale:0}. Use -puddle clear to remove.",
                     68
                 );
             });

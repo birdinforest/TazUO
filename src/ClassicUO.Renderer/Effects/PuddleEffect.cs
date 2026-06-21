@@ -19,6 +19,10 @@ namespace ClassicUO.Renderer.Effects
             PuddleRadiusU = Parameters["PuddleRadiusU"];
             PuddleRadiusV = Parameters["PuddleRadiusV"];
             Alpha = Parameters["Alpha"];
+            ReflectStrength = Parameters["ReflectStrength"];
+            WaveStrength = Parameters["WaveStrength"];
+            WaveSpeed = Parameters["WaveSpeed"];
+            WaveScale = Parameters["WaveScale"];
 
             CurrentTechnique = Techniques["PuddleTechnique"];
         }
@@ -67,5 +71,9 @@ namespace ClassicUO.Renderer.Effects
         public EffectParameter PuddleRadiusU { get; }
         public EffectParameter PuddleRadiusV { get; }
         public EffectParameter Alpha { get; }
+        public EffectParameter ReflectStrength { get; }
+        public EffectParameter WaveStrength { get; }
+        public EffectParameter WaveSpeed { get; }
+        public EffectParameter WaveScale { get; }
     }
 }

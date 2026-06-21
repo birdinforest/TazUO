@@ -1204,7 +1204,6 @@ namespace ClassicUO.Game.Scenes
             Matrix.Multiply(ref temp1, ref matTrans3, out Matrix worldRTMatrix);
 
             EnsurePuddleRenderer(gd);
-            _puddleRenderer?.CaptureReflection(batcher, gd, _world_render_target);
 
             DrawWorld(batcher, ref worldRTMatrix);
 
@@ -1247,6 +1246,39 @@ namespace ClassicUO.Game.Scenes
             batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 
             float brightlight = ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f;
+            bool hasReflection = _puddleRenderer != null && PuddleManager.GetRegions().Count > 0;
+
+            // === Phase 1: object-space reflection capture ===
+            // Each sprite is drawn at its normal screen position but with destinationH negated
+            // (via batcher.ReflectionMode), so the sprite extends downward from the feet anchor
+            // instead of upward — mirroring each object around its own feet, not a shared pivot.
+            if (hasReflection)
+            {
+                _puddleRenderer!.BeginReflectionTarget(
+                    batcher.GraphicsDevice,
+                    _world_render_target.Width,
+                    _world_render_target.Height
+                );
+
+                batcher.ReflectionMode = true;
+                batcher.SetSampler(SamplerState.PointClamp);
+                batcher.Begin(null, matrix);
+                batcher.SetBrightlight(brightlight);
+                batcher.SetStencil(DepthStencilState.Default);
+                RenderedObjectsCount = 0;
+                DrawWorldObjectLayers(batcher);
+                batcher.SetSampler(null);
+                batcher.SetStencil(null);
+                batcher.End();
+                batcher.ReflectionMode = false;
+                batcher.ReflectionPivotOffset = 0f;
+
+                _puddleRenderer!.EndReflectionTarget(batcher.GraphicsDevice);
+                batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
+            }
+
+            // === Phase 2: final frame — land → puddle → objects ===
+            batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 
             // === Pass 1: Ground tiles only ===
             batcher.SetSampler(SamplerState.PointClamp);
@@ -1254,7 +1286,6 @@ namespace ClassicUO.Game.Scenes
             batcher.SetBrightlight(brightlight);
             batcher.SetStencil(DepthStencilState.Default);
 
-            Profiler.EnterContext("DrawObjects");
             RenderedObjectsCount = 0;
             Profiler.EnterContext("Land");
             RenderedObjectsCount += DrawRenderList(
@@ -1285,6 +1316,53 @@ namespace ClassicUO.Game.Scenes
             batcher.SetBrightlight(brightlight);
             batcher.SetStencil(DepthStencilState.Default);
 
+            DrawWorldObjectLayers(batcher);
+
+            batcher.SetSampler(null);
+            batcher.SetStencil(null);
+            batcher.End();
+
+            // Draw overheads and selection into the render target (for consistent scaling)
+            // Use the same matrix transform as game objects to ensure coordinate system consistency
+            batcher.Begin(null, matrix);
+
+            DrawOverheads(batcher);
+            DrawSelection(batcher);
+
+            // Render projectile debug markers (client-side only, no network packets)
+            // Use the same offset as UpdateRealScreenPosition for consistency
+            ProjectileDebugVisualizer.Render(batcher, _offset);
+
+            batcher.End();
+
+            // Restore previous render target
+            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
+            {
+                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
+            }
+            else
+            {
+                batcher.GraphicsDevice.SetRenderTarget(null);
+            }
+
+            //batcher.Begin();
+            //hueVec.X = 0;
+            //hueVec.Y = 1;
+            //hueVec.Z = 1;
+            //string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}\nArt texture count: {TextureAtlas.Shared.TexturesCount}\nMaxZ: {_maxZ}\nMaxGround: {_maxGroundZ}";
+            //batcher.DrawString(Fonts.Bold, s, 200, 200, ref hueVec);
+            //hueVec = Vector3.Zero;
+            //batcher.DrawString(Fonts.Bold, s, 200 + 1, 200 - 1, ref hueVec);
+            //batcher.End();
+        }
+
+        /// <summary>
+        /// Draws statics, animations, effects, transparency, multi placement, and weather.
+        /// Caller must have batcher.Begin active with matrix/brightlight/stencil configured.
+        /// </summary>
+        private void DrawWorldObjectLayers(UltimaBatcher2D batcher)
+        {
+            Profiler.EnterContext("DrawObjects");
             Profiler.EnterContext("Statics");
             RenderedObjectsCount += DrawRenderList(
                 batcher,
@@ -1334,49 +1412,11 @@ namespace ClassicUO.Game.Scenes
                 Profiler.ExitContext("DrawMulti");
             }
 
-            batcher.SetSampler(null);
-            batcher.SetStencil(null);
-
             // draw weather
             if (!ProfileManager.CurrentProfile.DisableWeather)
             {
                 _world.Weather.Draw(batcher, 0, 0); // TODO: fix the depth
             }
-
-            batcher.End();
-
-            // Draw overheads and selection into the render target (for consistent scaling)
-            // Use the same matrix transform as game objects to ensure coordinate system consistency
-            batcher.Begin(null, matrix);
-
-            DrawOverheads(batcher);
-            DrawSelection(batcher);
-
-            // Render projectile debug markers (client-side only, no network packets)
-            // Use the same offset as UpdateRealScreenPosition for consistency
-            ProjectileDebugVisualizer.Render(batcher, _offset);
-
-            batcher.End();
-
-            // Restore previous render target
-            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
-            {
-                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
-            }
-            else
-            {
-                batcher.GraphicsDevice.SetRenderTarget(null);
-            }
-
-            //batcher.Begin();
-            //hueVec.X = 0;
-            //hueVec.Y = 1;
-            //hueVec.Z = 1;
-            //string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}\nArt texture count: {TextureAtlas.Shared.TexturesCount}\nMaxZ: {_maxZ}\nMaxGround: {_maxGroundZ}";
-            //batcher.DrawString(Fonts.Bold, s, 200, 200, ref hueVec);
-            //hueVec = Vector3.Zero;
-            //batcher.DrawString(Fonts.Bold, s, 200 + 1, 200 - 1, ref hueVec);
-            //batcher.End();
         }
 
         private int DrawRenderList(UltimaBatcher2D batcher, List<GameObject> renderList)

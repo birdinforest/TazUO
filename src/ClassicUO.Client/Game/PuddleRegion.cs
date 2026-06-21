@@ -12,5 +12,12 @@ namespace ClassicUO.Game
         public int TileZ { get; set; }
         public float Radius { get; set; } = 44f;
         public float Alpha { get; set; } = 0.85f;
+        public float ReflectStrength { get; set; } = 0.45f;
+        /// <summary>UV distortion amplitude for internal water ripples (typical 0.01–0.04).</summary>
+        public float WaveStrength { get; set; } = 0.018f;
+        /// <summary>Time multiplier for ripple animation (1 = default speed).</summary>
+        public float WaveSpeed { get; set; } = 1.0f;
+        /// <summary>Noise frequency scale for ripples (typical 12–24).</summary>
+        public float WaveScale { get; set; } = 18.0f;
     }
 }
