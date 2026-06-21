@@ -15,16 +15,19 @@ namespace ClassicUO.Game
         private const int VERTS_PER_PUDDLE = 4;
         private const int TRIS_PER_PUDDLE = 2;
 
-        private readonly PuddleEffect _effect;
+        private readonly PuddleEffect? _effect;
         private readonly VertexBuffer _vb;
         private readonly IndexBuffer _ib;
         private readonly PuddleVertex[] _verts = new PuddleVertex[MAX_PUDDLES * VERTS_PER_PUDDLE];
 
-        public RenderTarget2D ReflectionRT { get; private set; }
+        public RenderTarget2D? ReflectionRT { get; private set; }
 
         public PuddleRenderer(GraphicsDevice gd)
         {
-            _effect = new PuddleEffect(gd);
+            if (!PuddleEffect.TryCreate(gd, out _effect))
+            {
+                // Detailed diagnostics are logged by PuddleEffect.TryCreate.
+            }
             _vb = new VertexBuffer(
                 gd,
                 PuddleVertex.VertexDeclaration,
@@ -80,10 +83,12 @@ namespace ClassicUO.Game
             ref Matrix worldRTMatrix,
             int rtW,
             int rtH,
-            float elapsedSeconds
+            float elapsedSeconds,
+            int cameraOffsetX,
+            int cameraOffsetY
         )
         {
-            if (regions.Count == 0 || ReflectionRT == null)
+            if (_effect == null || regions.Count == 0 || ReflectionRT == null)
             {
                 return;
             }
@@ -114,18 +119,19 @@ namespace ClassicUO.Game
             {
                 PuddleRegion r = regions[i];
 
-                float wx = (r.TileX - r.TileY) * 22f;
-                float wy = (r.TileX + r.TileY) * 22f - r.TileZ * 4f;
+                // Match GameObject.UpdateRealScreenPosition / ProjectileDebugVisualizer.
+                float cx = ((r.TileX - r.TileY) * 22f) - cameraOffsetX - 22f;
+                float cy = ((r.TileX + r.TileY) * 22f - (r.TileZ << 2)) - cameraOffsetY - 22f;
 
                 float hw = r.Radius * 2.0f;
                 float hh = r.Radius;
 
-                BuildQuadVerts(i, wx, wy, hw, hh, tx, ty, rtW, rtH);
+                BuildQuadVerts(i, cx, cy, hw, hh, tx, ty, rtW, rtH);
                 _vb.SetData(_verts, i * VERTS_PER_PUDDLE, VERTS_PER_PUDDLE);
 
                 _effect.MatrixTransform.SetValue(fullTransform);
                 _effect.Time.SetValue(elapsedSeconds);
-                _effect.PuddleCenterUV.SetValue(new Vector2((wx + tx) / rtW, (wy + ty) / rtH));
+                _effect.PuddleCenterUV.SetValue(new Vector2((cx + tx) / rtW, (cy + ty) / rtH));
                 _effect.PuddleRadiusU.SetValue(hw / rtW);
                 _effect.PuddleRadiusV.SetValue(hh / rtH);
                 _effect.Alpha.SetValue(r.Alpha);

@@ -1319,7 +1319,9 @@ namespace ClassicUO.Game.Scenes
                 ref matrix,
                 _world_render_target.Width,
                 _world_render_target.Height,
-                (float)(Time.Ticks / 1000.0)
+                (float)(Time.Ticks / 1000.0),
+                _offset.X,
+                _offset.Y
             );
 
             // Draw overheads and selection into the render target (for consistent scaling)

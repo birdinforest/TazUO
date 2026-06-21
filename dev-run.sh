@@ -23,16 +23,21 @@ SETTINGS_PATH="/Users/forrrest/TazUO-Launcher.osx-arm64/Profiles/Settings/a730bf
 
 # Debug flags
 DEBUG_GUMP_LOADING="${DEBUG_GUMP_LOADING:-false}"
+NO_INCREMENTAL=false
 
-# Parse arguments
+# Parse dev-run.sh flags; remaining args are passed to the client
 while [[ $# -gt 0 ]]; do
     case $1 in
         --debug-gump-loading)
             DEBUG_GUMP_LOADING="true"
             shift
             ;;
+        --no-incremental)
+            NO_INCREMENTAL=true
+            shift
+            ;;
         *)
-            # Pass through other arguments
+            # Pass through other arguments to the client
             break
             ;;
     esac
@@ -49,6 +54,7 @@ echo "- Architecture: $(uname -m) native"
 echo "- Fast startup, full debugging support"
 echo "- Settings: $SETTINGS_PATH"
 echo "- Debug Gump Loading: $DEBUG_GUMP_LOADING"
+echo "- No Incremental Build: $NO_INCREMENTAL"
 echo ""
 echo "Note: Plugin system (cuoapi.dll) may not work on arm64"
 echo "      Game will run without plugins"
@@ -59,6 +65,11 @@ echo ""
 # Export debug flag as environment variable
 export DEBUG_GUMP_LOADING
 
-# Run with .NET runtime directly
-dotnet run -c Debug -- -settings "$SETTINGS_PATH" "$@"
+if [[ "$NO_INCREMENTAL" == "true" ]]; then
+    echo "Running full rebuild (--no-incremental) before launch..."
+    dotnet build -c Debug --no-incremental
+    dotnet run -c Debug --no-build -- -settings "$SETTINGS_PATH" "$@"
+else
+    dotnet run -c Debug -- -settings "$SETTINGS_PATH" "$@"
+fi
 

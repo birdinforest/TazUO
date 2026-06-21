@@ -156,11 +156,17 @@ namespace ClassicUO.Game.Managers
                     radius = parsedRadius;
                 }
 
-                PuddleManager.Add(
+                PuddleRegion region = PuddleManager.Add(
                     _world.Player.X,
                     _world.Player.Y,
                     _world.Player.Z,
                     radius
+                );
+
+                GameActions.Print(
+                    _world,
+                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0}. Use -puddle clear to remove.",
+                    68
                 );
             });
 
