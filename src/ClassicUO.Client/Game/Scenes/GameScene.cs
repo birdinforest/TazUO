@@ -695,6 +695,7 @@ namespace ClassicUO.Game.Scenes
 
         private void FillGameObjectList()
         {
+            _renderListLand.Clear();
             _renderListStatics.Clear();
             _renderListAnimations.Clear();
             _renderListEffects.Clear();
@@ -1245,14 +1246,45 @@ namespace ClassicUO.Game.Scenes
             batcher.GraphicsDevice.SetRenderTarget(_world_render_target);
             batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 
-            batcher.SetSampler(SamplerState.PointClamp);
+            float brightlight = ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f;
 
+            // === Pass 1: Ground tiles only ===
+            batcher.SetSampler(SamplerState.PointClamp);
             batcher.Begin(null, matrix);
-            batcher.SetBrightlight(ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f);
+            batcher.SetBrightlight(brightlight);
             batcher.SetStencil(DepthStencilState.Default);
 
             Profiler.EnterContext("DrawObjects");
             RenderedObjectsCount = 0;
+            Profiler.EnterContext("Land");
+            RenderedObjectsCount += DrawRenderList(
+                batcher,
+                _renderListLand
+            );
+            Profiler.ExitContext("Land");
+
+            batcher.SetStencil(null);
+            batcher.SetSampler(null);
+            batcher.End();
+
+            // === Puddle pass: above ground tiles, below all objects ===
+            _puddleRenderer?.Draw(
+                batcher.GraphicsDevice,
+                PuddleManager.GetRegions(),
+                ref matrix,
+                _world_render_target.Width,
+                _world_render_target.Height,
+                (float)(Time.Ticks / 1000.0),
+                _offset.X,
+                _offset.Y
+            );
+
+            // === Pass 2: Statics, animations, effects, weather — all rendered on top of puddles ===
+            batcher.SetSampler(SamplerState.PointClamp);
+            batcher.Begin(null, matrix);
+            batcher.SetBrightlight(brightlight);
+            batcher.SetStencil(DepthStencilState.Default);
+
             Profiler.EnterContext("Statics");
             RenderedObjectsCount += DrawRenderList(
                 batcher,
@@ -1312,17 +1344,6 @@ namespace ClassicUO.Game.Scenes
             }
 
             batcher.End();
-
-            _puddleRenderer?.Draw(
-                batcher.GraphicsDevice,
-                PuddleManager.GetRegions(),
-                ref matrix,
-                _world_render_target.Width,
-                _world_render_target.Height,
-                (float)(Time.Ticks / 1000.0),
-                _offset.X,
-                _offset.Y
-            );
 
             // Draw overheads and selection into the render target (for consistent scaling)
             // Use the same matrix transform as game objects to ensure coordinate system consistency
