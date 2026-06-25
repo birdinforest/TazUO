@@ -1307,7 +1307,8 @@ namespace ClassicUO.Game.Scenes
                 _world_render_target.Height,
                 (float)(Time.Ticks / 1000.0),
                 _offset.X,
-                _offset.Y
+                _offset.Y,
+                _world
             );
 
             // === Pass 2: Statics, animations, effects, weather — all rendered on top of puddles ===

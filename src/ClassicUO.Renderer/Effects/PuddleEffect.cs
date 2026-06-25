@@ -24,8 +24,28 @@ namespace ClassicUO.Renderer.Effects
             WaveSpeed = Parameters["WaveSpeed"];
             WaveScale = Parameters["WaveScale"];
 
+            SupportsHeightMask = TryGetParameter(this, "UseHeightMask", out EffectParameter? useHeightMask);
+            if (SupportsHeightMask)
+            {
+                UseHeightMask = useHeightMask!;
+                MaskTileStepU = Parameters["MaskTileStepU"];
+                MaskTileStepV = Parameters["MaskTileStepV"];
+                MaskMinTileX = Parameters["MaskMinTileX"];
+                MaskMinTileY = Parameters["MaskMinTileY"];
+                MaskTileCols = Parameters["MaskTileCols"];
+                MaskTileRows = Parameters["MaskTileRows"];
+                PuddleTileX = Parameters["PuddleTileX"];
+                PuddleTileY = Parameters["PuddleTileY"];
+                if (TryGetParameter(this, "MaskSubScale", out EffectParameter? maskSubScale))
+                {
+                    MaskSubScale = maskSubScale;
+                }
+            }
+
             CurrentTechnique = Techniques["PuddleTechnique"];
         }
+
+        public bool SupportsHeightMask { get; }
 
         public static bool TryCreate(GraphicsDevice graphicsDevice, out PuddleEffect? effect)
         {
@@ -45,6 +65,21 @@ namespace ClassicUO.Renderer.Effects
 
             effect = new PuddleEffect(graphicsDevice);
             return true;
+        }
+
+        private static bool TryGetParameter(Effect effect, string name, out EffectParameter? parameter)
+        {
+            foreach (EffectParameter p in effect.Parameters)
+            {
+                if (p.Name == name)
+                {
+                    parameter = p;
+                    return true;
+                }
+            }
+
+            parameter = null;
+            return false;
         }
 
         private static bool IsValidD3D9Effect(ReadOnlySpan<byte> data)
@@ -75,5 +110,15 @@ namespace ClassicUO.Renderer.Effects
         public EffectParameter WaveStrength { get; }
         public EffectParameter WaveSpeed { get; }
         public EffectParameter WaveScale { get; }
+        public EffectParameter? UseHeightMask { get; }
+        public EffectParameter? MaskTileStepU { get; }
+        public EffectParameter? MaskTileStepV { get; }
+        public EffectParameter? MaskMinTileX { get; }
+        public EffectParameter? MaskMinTileY { get; }
+        public EffectParameter? MaskTileCols { get; }
+        public EffectParameter? MaskTileRows { get; }
+        public EffectParameter? PuddleTileX { get; }
+        public EffectParameter? PuddleTileY { get; }
+        public EffectParameter? MaskSubScale { get; }
     }
 }

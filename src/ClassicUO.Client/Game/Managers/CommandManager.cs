@@ -150,8 +150,8 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
-                // -puddle [radius] [reflectStrength] [waveStrength] [waveSpeed] [waveScale]
-                // e.g.  -puddle 60 0.6 0.02 1.0 18
+                // -puddle [radius] [reflectStrength] [waveStrength] [waveSpeed] [waveScale] [maxWaterZ]
+                // e.g.  -puddle 60 0.6 0.02 1.0 18 10
                 float radius = 44f;
                 float reflectStrength = 0.45f;
                 float waveStrength = 0.018f;
@@ -194,9 +194,22 @@ namespace ClassicUO.Game.Managers
                 region.WaveSpeed = waveSpeed;
                 region.WaveScale = waveScale;
 
+                if (s.Length > 6 && sbyte.TryParse(s[6], out sbyte maxWaterZ))
+                {
+                    region.UseHeightMask = true;
+                    region.MaxWaterZ = maxWaterZ;
+                    region.MaskDirty = true;
+                    region.MinWaterZ = PuddleRenderer.ComputeMinGroundZ(region, _world);
+                    region.TileZ = region.MinWaterZ;
+                }
+
+                string heightInfo = region.UseHeightMask
+                    ? $" minZ={region.MinWaterZ} maxWaterZ={region.MaxWaterZ}"
+                    : string.Empty;
+
                 GameActions.Print(
                     _world,
-                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0} reflect={reflectStrength:0.00} wave={waveStrength:0.000} speed={waveSpeed:0.0} scale={waveScale:0}. Use -puddle clear to remove.",
+                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0} reflect={reflectStrength:0.00} wave={waveStrength:0.000} speed={waveSpeed:0.0} scale={waveScale:0}{heightInfo}. Use -puddle clear to remove.",
                     68
                 );
             });
