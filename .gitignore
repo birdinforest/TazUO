@@ -269,3 +269,5 @@ external/MP3Sharp
 src/ClassicUO.Client/Data/
 .claude/settings.local.json
 .DS_Store
+src/ClassicUO.Client/Data/
+src/ClassicUO.Client/LegionScripts/
