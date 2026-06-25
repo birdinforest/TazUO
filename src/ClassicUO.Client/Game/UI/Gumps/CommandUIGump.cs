@@ -26,7 +26,7 @@ public class CommandUIGump : NineSliceGump
     public CommandUIGump(World world, int x, int y, CommandUIData data)
         : base(world, x, y, 600, 700,
               ModernUIConstants.ModernUIPanel,
-              ModernUIConstants.ModernUIPanel_BoderSize,
+              ModernUIConstants.ModernUIPanel_BorderSize,
               resizable: true,
               minWidth: 400,
               minHeight: 500)
