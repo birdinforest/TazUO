@@ -150,68 +150,31 @@ namespace ClassicUO.Game.Managers
                     return;
                 }
 
-                // -puddle [radius] [reflectStrength] [waveStrength] [waveSpeed] [waveScale] [maxWaterZ]
-                // e.g.  -puddle 60 0.6 0.02 1.0 18 10
-                float radius = 44f;
-                float reflectStrength = 0.45f;
-                float waveStrength = 0.018f;
-                float waveSpeed = 1.0f;
-                float waveScale = 18.0f;
-
-                if (s.Length > 1 && float.TryParse(s[1], out float parsedRadius))
+                if (s.Length > 1 && (s[1] == "gump" || s[1] == "ui"))
                 {
-                    radius = parsedRadius;
+                    UIManager.Add(new PuddleSetupGump(_world));
+                    return;
                 }
 
-                if (s.Length > 2 && float.TryParse(s[2], out float parsedReflect))
+                if (!PuddleSpawnOptions.TryParseCommand(s, _world.Player.X, _world.Player.Y, _world.Player.Z, out PuddleSpawnOptions options))
                 {
-                    reflectStrength = Math.Clamp(parsedReflect, 0f, 1f);
+                    return;
                 }
 
-                if (s.Length > 3 && float.TryParse(s[3], out float parsedWaveStrength))
+                if (PuddleSpawn.TryCreate(_world, options, out string message) != null)
                 {
-                    waveStrength = Math.Max(0f, parsedWaveStrength);
+                    GameActions.Print(_world, message + " Use -puddle clear to remove.", 68);
+                }
+            });
+
+            Register("puddlegump", s =>
+            {
+                if (_world.Player == null)
+                {
+                    return;
                 }
 
-                if (s.Length > 4 && float.TryParse(s[4], out float parsedWaveSpeed))
-                {
-                    waveSpeed = Math.Max(0.001f, parsedWaveSpeed);
-                }
-
-                if (s.Length > 5 && float.TryParse(s[5], out float parsedWaveScale))
-                {
-                    waveScale = Math.Max(1f, parsedWaveScale);
-                }
-
-                PuddleRegion region = PuddleManager.Add(
-                    _world.Player.X,
-                    _world.Player.Y,
-                    _world.Player.Z,
-                    radius
-                );
-                region.ReflectStrength = reflectStrength;
-                region.WaveStrength = waveStrength;
-                region.WaveSpeed = waveSpeed;
-                region.WaveScale = waveScale;
-
-                if (s.Length > 6 && sbyte.TryParse(s[6], out sbyte maxWaterZ))
-                {
-                    region.UseHeightMask = true;
-                    region.MaxWaterZ = maxWaterZ;
-                    region.MaskDirty = true;
-                    region.MinWaterZ = PuddleRenderer.ComputeMinGroundZ(region, _world);
-                    region.TileZ = region.MinWaterZ;
-                }
-
-                string heightInfo = region.UseHeightMask
-                    ? $" minZ={region.MinWaterZ} maxWaterZ={region.MaxWaterZ}"
-                    : string.Empty;
-
-                GameActions.Print(
-                    _world,
-                    $"Puddle #{region.Id} at ({region.TileX},{region.TileY},{region.TileZ}) radius={radius:0} reflect={reflectStrength:0.00} wave={waveStrength:0.000} speed={waveSpeed:0.0} scale={waveScale:0}{heightInfo}. Use -puddle clear to remove.",
-                    68
-                );
+                UIManager.Add(new PuddleSetupGump(_world));
             });
 
             Register("marktile", s =>
