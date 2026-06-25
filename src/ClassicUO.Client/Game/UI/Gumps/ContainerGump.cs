@@ -256,7 +256,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left || UIManager.IsMouseOverWorld)
             {
@@ -553,7 +553,7 @@ namespace ClassicUO.Game.UI.Gumps
             base.Restore(xml);
             // skip loading
 
-            Client.Game.GetScene<GameScene>()?.DoubleClickDelayed(LocalSerial);
+            ObjectActionQueue.Instance.Enqueue(ObjectActionQueueItem.DoubleClick(LocalSerial), ActionPriority.UseItem);
 
             Dispose();
         }
@@ -751,7 +751,7 @@ namespace ClassicUO.Game.UI.Gumps
             base.Dispose();
         }
 
-        protected override void CloseWithRightClick()
+        public override void CloseWithRightClick()
         {
             base.CloseWithRightClick();
 

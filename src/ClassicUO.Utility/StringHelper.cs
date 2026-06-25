@@ -4,8 +4,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Runtime.CompilerServices;
-using System.Security;
-using System.Text;
 using SDL3;
 
 namespace ClassicUO.Utility
@@ -389,6 +387,59 @@ namespace ClassicUO.Utility
                 return int.TryParse(text.Substring(2), NumberStyles.AllowHexSpecifier, null, out graphic);
 
             return int.TryParse(text, out graphic);
+        }
+
+        /// <summary>
+        /// Tries to parse a graphic ID from a string, supporting both decimal and hexadecimal (0x prefix) formats.
+        /// </summary>
+        /// <param name="text">The input string to parse</param>
+        /// <param name="graphic">The parsed graphic ID</param>
+        /// <returns>True if parsing succeeded, false otherwise</returns>
+        public static bool TryParseUint(string text, out uint graphic)
+        {
+            graphic = 0;
+            if (string.IsNullOrEmpty(text)) return false;
+
+            if (text.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                return uint.TryParse(text.Substring(2), NumberStyles.AllowHexSpecifier, null, out graphic);
+
+            return uint.TryParse(text, out graphic);
+        }
+
+        public static string FormatAsCurrency(int amount) => amount.ToString("N0", CultureInfo.CurrentCulture);
+
+        public static bool TryParseCurrency(string text, out int result)
+        {
+            result = 0;
+            if (string.IsNullOrWhiteSpace(text))
+                return false;
+
+            return int.TryParse(text, NumberStyles.AllowThousands, CultureInfo.CurrentCulture, out result);
+        }
+
+        public static string Truncate(string str, int maxLength, bool addEllipsis = true)
+        {
+            if (string.IsNullOrEmpty(str) || maxLength <= 0)
+            {
+                return string.Empty;
+            }
+
+            if (str.Length <= maxLength)
+            {
+                return str;
+            }
+
+            if (addEllipsis)
+            {
+                if (maxLength <= 3)
+                {
+                    return str[..maxLength];
+                }
+
+                return string.Concat(str.AsSpan(0, maxLength - 3), "...");
+            }
+
+            return str[..maxLength];
         }
     }
 }

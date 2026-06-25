@@ -9,6 +9,7 @@
 #define SHADOW 8
 #define LIGHTS 9
 #define EFFECT_HUED 10
+#define OUTLINE 11
 #define GUMP 20
 
 const static float3 LIGHT_DIRECTION = float3(0.0f, 1.0f, 1.0f);
@@ -22,6 +23,7 @@ float4x4 MatrixTransform;
 float4x4 WorldMatrix;
 float2 Viewport;
 float Brightlight;
+float2 TexelSize;
 
 sampler DrawSampler : register(s0);
 sampler HueSampler0 : register(s1);
@@ -48,10 +50,11 @@ float3 get_rgb(float gray, float hue)
     float halfPixelX = (1.0f / (HUE_COLUMNS * HUE_WIDTH)) * 0.5f;
     float hueColumnWidth = 1.0f / HUE_COLUMNS;
     float hueStart = frac(hue / HUE_COLUMNS);
-    
+
     float xPos = hueStart + gray / HUE_COLUMNS;
     xPos = clamp(xPos, hueStart + halfPixelX, hueStart + hueColumnWidth - halfPixelX);
-    float yPos = (hue % HUES_PER_TEXTURE) / (HUES_PER_TEXTURE - 1);
+    //float yPos = (hue % HUES_PER_TEXTURE) / (HUES_PER_TEXTURE - 1);
+	float yPos = ((float)(hue % HUES_PER_TEXTURE)) / (float)(HUES_PER_TEXTURE - 1);
     return tex2D(HueSampler0, float2(xPos, yPos)).rgb;
 }
 
@@ -76,27 +79,53 @@ float3 get_colored_light(float shader, float gray)
 PS_INPUT VertexShaderFunction(VS_INPUT IN)
 {
 	PS_INPUT OUT;
-	
+
 	OUT.Position = mul(mul(IN.Position, WorldMatrix), MatrixTransform);
-	
+
 	OUT.Position.x -= 0.5 / Viewport.x;
 	OUT.Position.y += 0.5 / Viewport.y;
 
-	OUT.TexCoord = IN.TexCoord; 
+	OUT.TexCoord = IN.TexCoord;
 	OUT.Normal = IN.Normal;
 	OUT.Hue = IN.Hue;
-	
+
 	return OUT;
 }
 
 float4 PixelShader_Hue(PS_INPUT IN) : COLOR0
-{	
+{
 	float4 color = tex2D(DrawSampler, IN.TexCoord.xy);
-		
-	if (color.a == 0.0f)
-		discard;
 
 	int mode = int(IN.Hue.y);
+
+    if (mode == OUTLINE)
+    {
+        if (color.a > 0.0f) discard;
+
+        // Use a fixed thickness
+        const int thickness = 1;
+
+        for (int x = -thickness; x <= thickness; x++)
+        {
+            for (int y = -thickness; y <= thickness; y++)
+            {
+                float2 offset = float2(x, y) * TexelSize;
+
+                // 2. Use tex2Dlod to avoid the "Gradient Instruction" warning
+                // float4(UV, 0, MipLevel)
+                float4 sample = tex2Dlod(DrawSampler, float4(IN.TexCoord + offset, 0, 0));
+
+                if (sample.a > 0.0f)
+                {
+                    return float4(IN.Normal.rgb, IN.Hue.z);
+                }
+            }
+        }
+        discard;
+    }
+
+	if (color.a == 0.0f)
+		discard;
 	float alpha = IN.Hue.z;
 
 	if (mode == NONE)

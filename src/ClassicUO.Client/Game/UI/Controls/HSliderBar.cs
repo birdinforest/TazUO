@@ -177,12 +177,13 @@ namespace ClassicUO.Game.UI.Controls
             {
                 ref readonly SpriteInfo gumpInfo = ref Client.Game.UO.Gumps.GetGump(idx: 0x845);
 
-                batcher.Draw(
-                    gumpInfo.Texture,
-                    new Vector2(x + _sliderX, y),
-                    gumpInfo.UV,
-                    hueVector
-                );
+                if(gumpInfo.Texture != null)
+                    batcher.Draw(
+                        gumpInfo.Texture,
+                        new Vector2(x + _sliderX, y),
+                        gumpInfo.UV,
+                        hueVector
+                    );
             }
 
             if (_text != null)
@@ -211,7 +212,7 @@ namespace ClassicUO.Game.UI.Controls
             }
         }
 
-        protected override void OnMouseDown(int x, int y, MouseButtonType button)
+        public override void OnMouseDown(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left)
             {
@@ -221,7 +222,7 @@ namespace ClassicUO.Game.UI.Controls
             _clicked = true;
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left)
             {
@@ -232,7 +233,7 @@ namespace ClassicUO.Game.UI.Controls
             CalculateNew(x);
         }
 
-        protected override void OnMouseWheel(MouseEventType delta)
+        public override void OnMouseWheel(MouseEventType delta)
         {
             switch (delta)
             {

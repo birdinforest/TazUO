@@ -11,7 +11,7 @@ using ClassicUO.Network;
 using ClassicUO.Utility;
 using ClassicUO.Utility.Logging;
 using ClassicUO.Assets;
-using ClassicUO.Game.Managers.SpellVisualRange;
+using ClassicUO.Game.UI;
 
 namespace ClassicUO.Game.GameObjects
 {
@@ -32,7 +32,7 @@ namespace ClassicUO.Game.GameObjects
             Walker = new WalkerManager(this);
             Pathfinder = new Pathfinder(world);
 
-            Skill.SkillValueChangedEvent += (s, e) =>
+            EventSink.SkillValueChangedEvent += (s, e) =>
             {
                 if (ProfileManager.CurrentProfile.DisplaySkillBarOnChange)
                 {
@@ -40,14 +40,10 @@ namespace ClassicUO.Game.GameObjects
                 }
             };
 
-
-            if(ProfileManager.CurrentProfile != null && ProfileManager.CurrentProfile.EnableSpellIndicators)
-                UIManager.Add(new CastTimerProgressBar(world));
-
             IsPlayer = true;
         }
 
-        public bool IsVisible { get; set; } = true;
+        public new bool IsVisible { get; set; } = true;
 
         public Skill[] Skills { get; }
         public override bool InWarMode { get; set; }
@@ -301,11 +297,7 @@ namespace ClassicUO.Game.GameObjects
             _buffIcons[type] = new BuffIcon(type, graphic, time, text, title);
 
             if (ProfileManager.CurrentProfile.UseImprovedBuffBar)
-            {
-                ImprovedBuffGump gump = UIManager.GetGump<ImprovedBuffGump>();
-                if (gump != null)
-                    gump.AddBuff(new BuffIcon(type, graphic, time, text, title));
-            }
+                UIManager.ForEach<ImprovedBuffGump>(g => g.AddBuff(new BuffIcon(type, graphic, time, text, title)));
 
             EventSink.InvokeOnBuffAdded(null, new BuffEventArgs(_buffIcons[type]));
         }
@@ -328,13 +320,7 @@ namespace ClassicUO.Game.GameObjects
             }
 
             if (ProfileManager.CurrentProfile.UseImprovedBuffBar)
-            {
-                ImprovedBuffGump improvedGump = UIManager.GetGump<ImprovedBuffGump>();
-                if (improvedGump != null)
-                {
-                    improvedGump.RemoveBuff(graphic);
-                }
-            }
+                UIManager.ForEach<ImprovedBuffGump>(g => g.RemoveBuff(graphic));
         }
 
         public void UpdateAbilities()
@@ -365,11 +351,8 @@ namespace ClassicUO.Game.GameObjects
                 }
             }
 
-            for (LinkedListNode<Gump> gump = UIManager.Gumps.First; gump != null; gump = gump.Next)
-            {
-                if (gump.Value is UseAbilityButtonGump or CombatBookGump)
-                    gump.Value.RequestUpdateContents();
-            }
+            UIManager.ForEach<CombatBookGump>(g => g.RequestUpdateContents());
+            UIManager.ForEach<UseAbilityButtonGump>(g => g.RequestUpdateContents());
         }
 
         protected override void OnPositionChanged()
@@ -392,10 +375,7 @@ namespace ClassicUO.Game.GameObjects
         public void TryOpenCorpses()
         {
             // Early return if both auto-open settings are disabled
-            if (!ProfileManager.CurrentProfile.AutoOpenCorpses && !ProfileManager.CurrentProfile.AutoOpenOwnCorpse)
-            {
-                return;
-            }
+            if (!ProfileManager.CurrentProfile.AutoOpenCorpses && !ProfileManager.CurrentProfile.AutoOpenOwnCorpse) return;
 
             // Use the optimized corpse collection instead of iterating all items
             Item[] corpses = World.GetCorpseSnapshot();
@@ -430,7 +410,7 @@ namespace ClassicUO.Game.GameObjects
                         }
 
                         AutoOpenedCorpses.Add(item.Serial);
-                        GameActions.DoubleClickQueued(item.Serial);
+                        GameActions.QueueOpenCorpse(item.Serial);
                     }
                 }
             }
@@ -444,7 +424,8 @@ namespace ClassicUO.Game.GameObjects
 
         private void TryOpenDoors()
         {
-            if (!World.Player.IsDead && ProfileManager.CurrentProfile.AutoOpenDoors)
+            if (!World.Player.IsDead && ProfileManager.CurrentProfile.AutoOpenDoors
+                && (ProfileManager.CurrentProfile.AutoOpenDoorsIfHidden || !IsHidden))
             {
                 int x = X, y = Y, z = Z;
                 Pathfinder.GetNewXY((byte)Direction, ref x, ref y);
@@ -491,10 +472,8 @@ namespace ClassicUO.Game.GameObjects
                     bank.Items = null;
                 }
 
-                UIManager.GetGump<ContainerGump>(bank.Serial)?.Dispose();
-                #region GridContainer
-                UIManager.GetGump<GridContainer>(bank.Serial)?.Dispose();
-                #endregion
+                UIManager.ForEach<ContainerGump>(g=> g.Dispose(), bank.Serial);
+                UIManager.ForEach<GridContainer>(g=> g.Dispose(), bank.Serial);
 
                 bank.Opened = false;
             }
@@ -507,7 +486,7 @@ namespace ClassicUO.Game.GameObjects
                 if (UIManager.Gumps.Count > i)
                     continue;
 
-                Gump gump = UIManager.Gumps.ElementAt(i);
+                IGui gump = UIManager.Gumps.ElementAt(i);
                 //}
                 //foreach (Gump gump in UIManager.Gumps)
                 //{
@@ -660,7 +639,7 @@ namespace ClassicUO.Game.GameObjects
             }
             else
             {
-                if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed)
+                if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed || SpeedMode == CharacterSpeedType.CantWalkOrRun)
                 {
                     return false;
                 }
@@ -867,7 +846,7 @@ namespace ClassicUO.Game.GameObjects
 
         public bool WalkNotAvoid(Direction direction, bool run)
         {
-            if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed)
+            if (Walker.WalkingFailed || Walker.LastStepRequestTime > Time.Ticks || Walker.StepsCount >= Constants.MAX_STEP_COUNT || Client.Game.UO.Version >= ClientVersion.CV_60142 && IsParalyzed || SpeedMode == CharacterSpeedType.CantWalkOrRun)
             {
                 return false;
             }
@@ -1031,5 +1010,21 @@ namespace ClassicUO.Game.GameObjects
             return true;
         }
 
+        public Item[] GetEquippedItems()
+        {
+            List<Item> items = new();
+
+            for (LinkedObject i = Items; i != null; i = i.Next)
+            {
+                var it = (Item) i;
+
+                if (!it.IsDestroyed)
+                {
+                    items.Add(it);
+                }
+            }
+
+            return items.ToArray();
+        }
     }
 }

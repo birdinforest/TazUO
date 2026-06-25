@@ -20,7 +20,7 @@ namespace ClassicUO.Game.Managers
                     field = new();
                 return field;
             }
-            private set => field = value;
+            private set;
         }
 
         private long _nextBandageTime = 0;
@@ -30,8 +30,13 @@ namespace ClassicUO.Game.Managers
         private Timer _retryTimer;
         private const int RETRY_INTERVAL_MS = 100;
 
+        public int PendingHealCount => _pendingHeals.Count;
+        public int PendingInGlobalQueueCount => _enqueuedInGlobalQueue.Count;
+
         private bool IsEnabled => ProfileManager.CurrentProfile?.EnableBandageAgent ?? false;
         private bool FriendBandagingEnabled => ProfileManager.CurrentProfile?.BandageAgentBandageFriends ?? false;
+        private bool AllyBandagingEnabled => ProfileManager.CurrentProfile?.BandageAgentBandageAllies ?? false;
+        private bool PetBandagingEnabled => ProfileManager.CurrentProfile?.BandageAgentBandagePets ?? false;
         private int HealDelayMs => ProfileManager.CurrentProfile?.BandageAgentDelay ?? 3000;
         private bool CheckForBuff => ProfileManager.CurrentProfile?.BandageAgentCheckForBuff ?? false;
         private ushort BandageGraphic => ProfileManager.CurrentProfile?.BandageAgentGraphic ?? 0x0E21;
@@ -43,11 +48,14 @@ namespace ClassicUO.Game.Managers
         private bool HasBandagingBuff { get; set; } = false;
         private bool UseDexFormula => ProfileManager.CurrentProfile?.BandageAgentUseDexFormula ?? false;
         private bool DisableSelfHeal => ProfileManager.CurrentProfile?.BandageAgentDisableSelfHeal ?? false;
+        private bool UseJournalTrigger => ProfileManager.CurrentProfile?.BandageAgentUseJournalTrigger ?? false;
+        private string JournalMessages => ProfileManager.CurrentProfile?.BandageAgentJournalMessages ?? "";
 
         private BandageManager()
         {
-            EventSink.OnBuffAdded += OnBuffAdded;
-            EventSink.OnBuffRemoved += OnBuffRemoved;
+            EventSink.OnBuffAddedInternal += OnBuffAdded;
+            EventSink.OnBuffRemovedInternal += OnBuffRemoved;
+            EventSink.JournalEntryAdded += OnJournalEntryAdded;
         }
 
         public void SetPoisoned(uint serial, bool status)
@@ -63,6 +71,27 @@ namespace ClassicUO.Game.Managers
         {
             if (e.Buff.Type == BuffIconType.Healing) HasBandagingBuff = true;
             if (e.Buff.Type == BuffIconType.Veterinary) HasBandagingBuff = true;
+        }
+
+        private void OnJournalEntryAdded(object sender, JournalEntry e)
+        {
+            if (!IsEnabled || !UseJournalTrigger || e == null) return;
+            if (string.IsNullOrEmpty(e.Text)) return;
+
+            string messages = JournalMessages;
+            if (string.IsNullOrWhiteSpace(messages)) return;
+
+            string[] triggers = messages.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            foreach (string trigger in triggers)
+            {
+                if (!string.IsNullOrEmpty(trigger) && e.Text.Contains(trigger, StringComparison.OrdinalIgnoreCase))
+                {
+                    _nextBandageTime = 0;
+                    HasBandagingBuff = false;
+                    VerifyTimer();
+                    return;
+                }
+            }
         }
 
         private void OnBuffRemoved(object sender, BuffEventArgs e)
@@ -138,6 +167,11 @@ namespace ClassicUO.Game.Managers
         {
             uint serial;
 
+            if (World.Instance.Player.FindBandage(BandageGraphic) == null) {
+                VerifyTimer();
+                return; //Return early if we don't have bandages..
+            }
+
             // Safely get and remove the first item from the queue
             lock (_queueLock)
             {
@@ -149,9 +183,48 @@ namespace ClassicUO.Game.Managers
 
             // Process outside the lock to avoid holding it during game logic
             Mobile mobile = World.Instance?.Mobiles?.Get(serial);
-            if (ShouldAttemptHeal(mobile)) AttemptHealMobile(mobile);
+            if (ShouldAttemptHeal(mobile))
+            {
+                AttemptHealMobile(mobile);
+            }
+            else if (IsHealCandidate(mobile))
+            {
+                // Conditions temporarily not met (e.g., distance, hidden, invul) but
+                // mobile still needs healing - keep retrying so we don't lose track
+                ScheduleRetry(serial);
+            }
 
             VerifyTimer();
+        }
+
+        /// <summary>
+        /// Checks whether a mobile is still a valid candidate for healing, ignoring
+        /// temp conditions like distance/hidden/invul. Used to decide whether to
+        /// keep retrying when ShouldAttemptHeal returns false.
+        /// </summary>
+        private bool IsHealCandidate(Mobile mobile)
+        {
+            PlayerMobile player = World.Instance?.Player;
+
+            if (player == null || mobile == null || mobile.IsDead)
+                return false;
+
+            bool isPlayer = mobile == player;
+            bool isFriend = !isPlayer && FriendBandagingEnabled && FriendsListManager.Instance.IsFriend(mobile);
+            bool isAlly = !isPlayer && AllyBandagingEnabled && mobile.NotorietyFlag == NotorietyFlag.Ally;
+            bool isPet = !isPlayer && PetBandagingEnabled && mobile.IsRenamable;
+
+            if (!isPlayer && !isFriend && !isAlly && !isPet)
+                return false;
+
+            if (isPlayer && DisableSelfHeal)
+                return false;
+
+            if (mobile.HitsMax <= 0)
+                return false;
+
+            int currentHpPercentage = (int)((double)mobile.Hits / mobile.HitsMax * 100);
+            return currentHpPercentage < HpPercentageThreshold || (UseOnPoisoned && mobile.IsPoisoned);
         }
 
         private bool ShouldAttemptHeal(Mobile mobile)
@@ -163,18 +236,21 @@ namespace ClassicUO.Game.Managers
             if (mobile.IsDead)
                 return false;
 
-            // Check if this is the player or a friend
+            // Check if this is the player or a friend/ally
             bool isPlayer = mobile == player;
             bool isFriend = !isPlayer && FriendBandagingEnabled && FriendsListManager.Instance.IsFriend(mobile.Serial);
-            if (!isPlayer && !isFriend)
+            bool isAlly = !isPlayer && AllyBandagingEnabled && mobile.NotorietyFlag == NotorietyFlag.Ally;
+            bool isPet = !isPlayer && PetBandagingEnabled && mobile.IsRenamable;
+
+            if (!isPlayer && !isFriend && !isAlly && !isPet)
                 return false;
 
             // Check if self-healing is disabled
             if (isPlayer && DisableSelfHeal)
                 return false;
 
-            // Check distance for friends (within 3 tiles)
-            if (isFriend && mobile.Distance > 3)
+            // Check distance for friends/allies (within 3 tiles)
+            if ((isFriend || isAlly) && mobile.Distance > 3)
                 return false;
 
             // Guard against divide-by-zero and invul
@@ -219,7 +295,7 @@ namespace ClassicUO.Game.Managers
             bool shouldEnqueue;
             lock (_queueLock) shouldEnqueue = _enqueuedInGlobalQueue.Add(mobile.Serial);
 
-            if (shouldEnqueue) GlobalPriorityQueue.Instance.Enqueue(() => ExecuteHealMobile(mobile));
+            if (shouldEnqueue) ObjectActionQueue.Instance.Enqueue(new ObjectActionQueueItem(() => ExecuteHealMobile(mobile)), ActionPriority.Immediate);
         }
 
         private void ExecuteHealMobile(Mobile mobile)
@@ -299,8 +375,9 @@ namespace ClassicUO.Game.Managers
         {
             DestroyTimer();
             ClearAllPendingHeals();
-            EventSink.OnBuffAdded -= OnBuffAdded;
-            EventSink.OnBuffRemoved -= OnBuffRemoved;
+            EventSink.OnBuffAddedInternal -= OnBuffAdded;
+            EventSink.OnBuffRemovedInternal -= OnBuffRemoved;
+            EventSink.JournalEntryAdded -= OnJournalEntryAdded;
             Instance = null;
         }
     }

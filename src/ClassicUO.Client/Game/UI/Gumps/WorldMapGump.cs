@@ -54,9 +54,10 @@ public class WorldMapGump : ResizableGump
     private static readonly Color _semiTransparentWhiteForGrid = new Color(255, 255, 255, 56);
     private static Point _last_position = new Point(100, 100);
     private static Texture2D _mapTexture;
+    private static string _mapPngFilePath;
     private Map.Map _map = null;
 
-    private Point _center, _lastScroll, _mouseCenter, _scroll;
+    private Point _center, _lastScroll, _scroll;
     private Point? _lastMousePosition = null;
     private bool _flipMap = true;
     private bool _freeView;
@@ -95,6 +96,19 @@ public class WorldMapGump : ResizableGump
     private GumpPic _northIcon;
 
     private WMapMarker _gotoMarker;
+
+    private Point? _navDest;
+    private long _navDestSetTime;
+    private List<Point> _navPath;
+    private Action<int, int> _navStepFailedHandler;
+
+    private const int MAX_NAV_REPLANS = 3;
+    private int _navReplansLeft;
+
+    // User-configurable replan budget; falls back to the default when no profile is loaded.
+    private static int MaxNavReplans => ProfileManager.CurrentProfile?.WorldMapPathfindingMaxRetries >= 0
+        ? ProfileManager.CurrentProfile.WorldMapPathfindingMaxRetries
+        : MAX_NAV_REPLANS;
 
     private static int _mapLoading;
     private Task _loadingTask;
@@ -311,7 +325,15 @@ public class WorldMapGump : ResizableGump
         _options["goto_location"] = new ContextMenuItemEntry
         (
             ResGumps.GotoLocation,
-            () => UIManager.Add(new LocationGoGump(World, (x, y) => GoToMarker(x, y, true)))
+            () => UIManager.Add(new LocationGoGump(
+                    World,
+                    (x, y) => GoToMarker(x, y, true),
+                    ClearGoToMarker,
+                    _gotoMarker != null // Pass in the current marker location, if any
+                        ? new Point(_gotoMarker.X, _gotoMarker.Y)
+                        : null
+                )
+            )
         );
 
         _options["top_most"] = new ContextMenuItemEntry(ResGumps.TopMost, () => { TopMost = !TopMost; }, true, _isTopMost);
@@ -386,7 +408,7 @@ public class WorldMapGump : ResizableGump
         {
             ProfileManager.CurrentProfile.WebMapAutoStart = !ProfileManager.CurrentProfile.WebMapAutoStart;
             if (!MapWebServerManager.Instance.IsRunning)
-                MapWebServerManager.Instance.Start();
+                _ = MapWebServerManager.Instance.Start();
 
         }, true, ProfileManager.CurrentProfile.WebMapAutoStart);
 
@@ -396,7 +418,8 @@ public class WorldMapGump : ResizableGump
 
         _options["reset_map_cache"] = new ContextMenuItemEntry(ResGumps.ResetMapsCache, () =>
         {
-            Directory.GetFiles(_mapsCachePath, "*.png").ForEach(s => File.Delete(s));
+            if(Directory.Exists(_mapsCachePath))
+                Directory.GetFiles(_mapsCachePath, "*.png").ForEach(s => File.Delete(s));
         }, false);
     }
 
@@ -417,6 +440,11 @@ public class WorldMapGump : ResizableGump
         _center.X = x;
         _center.Y = y;
     }
+
+    /// <summary>
+    /// Clears the current <em>Go-To</em> marker, if it was set
+    /// </summary>
+    public void ClearGoToMarker() => _gotoMarker = null;
 
     private void BuildContextMenuForZones(ContextMenuControl parent)
     {
@@ -470,7 +498,7 @@ public class WorldMapGump : ResizableGump
         parent.Add(zoneOptions);
     }
 
-    protected override void CloseWithRightClick()
+    public override void CloseWithRightClick()
     {
         if (!Keyboard.Ctrl)
         {
@@ -489,8 +517,8 @@ public class WorldMapGump : ResizableGump
         ContextMenu?.Dispose();
         ContextMenu = new ContextMenuControl(this);
 
-        var follow = new ContextMenuItemEntry(Language.Instance.MapLanguage.Follow);
-        follow.Add(new ContextMenuItemEntry(Language.Instance.MapLanguage.Yourself, () => { following = World.Player; }, true));
+        var follow = new ContextMenuItemEntry(TazLang.Get("map_follow"));
+        follow.Add(new ContextMenuItemEntry(TazLang.Get("map_yourself"), () => { following = World.Player; }, true));
         if (World.Party != null && World.Party.Leader != 0)
         {
             foreach (PartyMember e in World.Party.Members)
@@ -795,6 +823,18 @@ public class WorldMapGump : ResizableGump
 
         Client.Game.UO.GameCursor.IsDraggingCursorForced = false;
 
+        // Stop any in-progress WorldMap navigation so the step-fail hook can't fire
+        // against this gump after it's been disposed.
+        if (_world?.Player?.Pathfinder != null)
+        {
+            if (_navStepFailedHandler != null)
+                _world.Player.Pathfinder.OnComputedPathStepFailed -= _navStepFailedHandler;
+            _world.Player.Pathfinder.StopAutoWalk();
+        }
+        _navStepFailedHandler = null;
+        _navDest = null;
+        _navPath = null;
+
         base.Dispose();
     }
 
@@ -888,7 +928,7 @@ public class WorldMapGump : ResizableGump
 
             try
             {
-                stream.Read(buffer, 0, buffer.Length);
+                stream.ReadExactly(buffer, 0, (int)stream.Length);
 
                 var reader = new StackDataReader(buffer.AsSpan(0, (int)stream.Length));
 
@@ -1200,35 +1240,42 @@ public class WorldMapGump : ResizableGump
 
         _mapLoading = 1;
 
-        lock (Map.Map.GetMapPngLock())
+        // The PNG lock only guards the CPU-side generation. GPU operations
+        // (Dispose + FromStream) are dispatched to the main/render thread AFTER the
+        // lock is released, to avoid deadlock: holding the lock while blocking on
+        // BubblingInvokeOnMainThread could deadlock if the main thread also tries to
+        // acquire the same lock. _mapLoading stays 1 until the texture is recreated so
+        // UpdateWorldMapChunk does not write into a texture that is being disposed.
+        try
         {
-            try
+            string fileMapPath;
+            lock (Map.Map.GetMapPngLock())
             {
-                _mapTexture?.Dispose();
+                fileMapPath = Map.Map.GenerateMapPng(mapIndex, map, world);
+            }
 
-                // Use Map.GenerateMapPng to generate the PNG file
-                string fileMapPath = Map.Map.GenerateMapPng(mapIndex, map, world);
-
-                // Load the texture from the generated PNG
-                if (!string.IsNullOrEmpty(fileMapPath) && File.Exists(fileMapPath))
+            if (!string.IsNullOrEmpty(fileMapPath) && File.Exists(fileMapPath))
+            {
+                _mapPngFilePath = fileMapPath;
+                MainThreadQueue.BubblingInvokeOnMainThread(() =>
                 {
+                    _mapTexture?.Dispose();
                     using FileStream stream = File.OpenRead(fileMapPath);
                     _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
                     GameActions.Print(ResGumps.WorldMapLoaded, 0x48);
-                }
-                else
-                {
-                    Log.Error($"Failed to generate map PNG for map {mapIndex}");
-                }
+                });
             }
-            catch (ThreadInterruptedException)
+            else
             {
-                _mapLoading = 0;
+                Log.Error($"Failed to generate map PNG for map {mapIndex}");
             }
-            finally
-            {
-                _mapLoading = 0;
-            }
+        }
+        catch (ThreadInterruptedException)
+        {
+        }
+        finally
+        {
+            _mapLoading = 0;
         }
     }
 
@@ -1273,7 +1320,9 @@ public class WorldMapGump : ResizableGump
 
     public static void ClearMapCache() => Map.Map.ClearMapPngCache();
 
-    public static Texture2D GetMapTextureForMap(int mapIndex) => _mapTexture;
+    public static Texture2D GetMapTextureForMap() => _mapTexture;
+
+    public static string GetMapPngPath() => _mapPngFilePath;
 
     public static async Task LoadMapTextureForMap(int mapIndex)
     {
@@ -1300,13 +1349,18 @@ public class WorldMapGump : ResizableGump
                 return Map.Map.GenerateMapPng(mapIndex, map, World.Instance);
             });
 
-            // Now load the texture from the generated PNG on the main thread
+            // Now load the texture from the generated PNG on the main thread.
+            // After Task.Run above, we're on a thread pool thread, so dispatch back.
             if (!string.IsNullOrEmpty(generatedMapPath) && File.Exists(generatedMapPath))
             {
-                _mapTexture?.Dispose();
-                using FileStream stream = File.OpenRead(generatedMapPath);
-                _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
-                Utility.Logging.Log.Info($"Map texture loaded successfully for map {mapIndex}");
+                _mapPngFilePath = generatedMapPath;
+                MainThreadQueue.BubblingInvokeOnMainThread(() =>
+                {
+                    _mapTexture?.Dispose();
+                    using FileStream stream = File.OpenRead(generatedMapPath);
+                    _mapTexture = Texture2D.FromStream(Client.Game.GraphicsDevice, stream);
+                    Utility.Logging.Log.Info($"Map texture loaded successfully for map {mapIndex}");
+                });
             }
             else
             {
@@ -2081,6 +2135,8 @@ public class WorldMapGump : ResizableGump
                     halfHeight
                 );
 
+                DrawNavDestination(batcher, gX, gY, halfWidth, halfHeight);
+
                 batcher.ClipEnd();
             }
         }
@@ -2727,6 +2783,9 @@ public class WorldMapGump : ResizableGump
 
     private void DrawMarkerString(UltimaBatcher2D batcher, WMapMarker marker, int x, int y, int width, int height)
     {
+        if (string.IsNullOrEmpty(marker.Name))
+            return;
+
         int sx = marker.X - _center.X;
         int sy = marker.Y - _center.Y;
 
@@ -2801,6 +2860,78 @@ public class WorldMapGump : ResizableGump
             yy,
             hueVector
         );
+    }
+
+    private void DrawNavDestination(UltimaBatcher2D batcher, int x, int y, int width, int height)
+    {
+        if (!_navDest.HasValue || _world.Player == null)
+            return;
+
+        long elapsed = Environment.TickCount64 - _navDestSetTime;
+
+        // Auto-clear: player arrived within 3 tiles, after a 2-second grace period.
+        if (elapsed > 2000)
+        {
+            int dx = _world.Player.X - _navDest.Value.X;
+            int dy = _world.Player.Y - _navDest.Value.Y;
+
+            if (dx * dx + dy * dy <= 9)
+            {
+                _navDest = null;
+                _navPath = null;
+                return;
+            }
+
+            // Also clear if pathfinding has fully stopped (cancelled or completed).
+            if (!_world.Player.Pathfinder.AutoWalking)
+            {
+                _navDest = null;
+                _navPath = null;
+                return;
+            }
+        }
+
+        Vector3 hueVector = ShaderHueTranslator.GetHueVector(0, false, 1f);
+        var pathTex = SolidColorTextureCache.GetTexture(new Color(220, 220, 220));
+
+        // Draw path as a series of small dots along the route (capped at ~200 dots).
+        if (_navPath != null && _navPath.Count > 1)
+        {
+            int step = Math.Max(1, _navPath.Count / 200);
+            const int DOT = 2;
+            const int DOT_HALF = DOT / 2;
+
+            for (int i = 0; i < _navPath.Count; i += step)
+            {
+                Point p = _navPath[i];
+                int psx = p.X - _center.X;
+                int psy = p.Y - _center.Y;
+                Point prot = RotatePoint(psx, psy, Zoom, 1, _flipMap ? 45f : 0f);
+                int pdx = prot.X + x + width;
+                int pdy = prot.Y + y + height;
+
+                if (pdx < x || pdx > x + Width - 8 - DOT || pdy < y || pdy > y + Height - 8 - DOT)
+                    continue;
+
+                batcher.Draw(pathTex, new Rectangle(pdx - DOT_HALF, pdy - DOT_HALF, DOT, DOT), hueVector);
+            }
+        }
+
+        // Destination marker (small square).
+        int sx = _navDest.Value.X - _center.X;
+        int sy = _navDest.Value.Y - _center.Y;
+
+        Point rot = RotatePoint(sx, sy, Zoom, 1, _flipMap ? 45f : 0f);
+        int drawX = rot.X + x + width;
+        int drawY = rot.Y + y + height;
+
+        const int SIZE = 6;
+        const int HALF = SIZE / 2;
+
+        if (drawX < x || drawX > x + Width - 8 - SIZE || drawY < y || drawY > y + Height - 8 - SIZE)
+            return;
+
+        batcher.Draw(pathTex, new Rectangle(drawX - HALF, drawY - HALF, SIZE, SIZE), hueVector);
     }
 
     private void DrawMulti
@@ -3194,7 +3325,7 @@ public class WorldMapGump : ResizableGump
 
     #region I/O
 
-    protected override void OnMouseUp(int x, int y, MouseButtonType button)
+    public override void OnMouseUp(int x, int y, MouseButtonType button)
     {
         bool allowTarget = _allowPositionalTarget && World.TargetManager.IsTargeting && World.TargetManager.TargetingState == CursorTarget.Position;
         if (allowTarget && button == MouseButtonType.Left)
@@ -3217,12 +3348,6 @@ public class WorldMapGump : ResizableGump
             _lastScroll.Y = _center.Y;
         }
 
-        if (button == MouseButtonType.Right && Keyboard.Ctrl && _lastMousePosition.HasValue)
-        {
-            CanvasToWorld(_lastMousePosition.Value.X, _lastMousePosition.Value.Y, out int wX, out int wY);
-            _world.Player.Pathfinder.WalkTo(wX, wY, 0, 1);
-        }
-
         if (button == MouseButtonType.Left && !Keyboard.Alt && !Keyboard.Ctrl && !Keyboard.Shift)
         {
             if (x > 10 && x < 120 && y > 10 && y < 25)
@@ -3237,10 +3362,50 @@ public class WorldMapGump : ResizableGump
         base.OnMouseUp(x, y, button);
     }
 
-    protected override void OnMouseDown(int x, int y, MouseButtonType button)
+    public override void OnMouseDown(int x, int y, MouseButtonType button)
     {
         if (!Client.Game.UO.GameCursor.ItemHold.Enabled)
         {
+            if (button == MouseButtonType.Left && Keyboard.Ctrl && !Keyboard.Alt)
+            {
+                CanvasToWorld(x, y, out int wX, out int wY);
+
+                WMapMarkerFile userFile = _markerFiles.Where(f => f.Name == USER_MARKERS_FILE).FirstOrDefault();
+                if (userFile == null)
+                    return;
+
+                UserMarkersGump existingGump = UIManager.GetGump<UserMarkersGump>();
+                existingGump?.Dispose();
+                new UserMarkersGump(World, wX, wY, userFile.Markers, mapIndex: _map.Index);
+                return;
+            }
+
+            if (button == MouseButtonType.Right && Keyboard.Ctrl && !Keyboard.Alt)
+            {
+                CanvasToWorld(x, y, out int wX, out int wY);
+                _navDest = new Point(wX, wY);
+                _navDestSetTime = Environment.TickCount64;
+                _navPath = null;
+                ClearGoToMarker();
+
+                // Fresh nav session: clear any dynamic-block memory from a previous run,
+                // reset the hook so a stale closure from an old session can't fire, and
+                // stop any walk that may still be in progress.
+                WorldMapPathfinder.ClearDynamicBlocks();
+                if (_world.Player?.Pathfinder != null)
+                {
+                    if (_navStepFailedHandler != null)
+                        _world.Player.Pathfinder.OnComputedPathStepFailed -= _navStepFailedHandler;
+                    _navStepFailedHandler = null;
+                    _world.Player.Pathfinder.StopAutoWalk();
+                }
+                _navReplansLeft = MaxNavReplans;
+
+                int mapIndex = _world.Map.Index;
+                StartNavPath(mapIndex, _world.Player.X, _world.Player.Y, _world.Player.Z, wX, wY, firstAttempt: true);
+                return;
+            }
+
             if (button == MouseButtonType.Left && (Keyboard.Alt || _freeView) || button == MouseButtonType.Middle)
             {
                 if (x > 4 && x < Width - 8 && y > 4 && y < Height - 8)
@@ -3261,30 +3426,100 @@ public class WorldMapGump : ResizableGump
                     }
                 }
 
-                if (button == MouseButtonType.Left && Keyboard.Ctrl)
-                {
-                    CanvasToWorld(x, y, out _mouseCenter.X, out _mouseCenter.Y);
-
-                    // Check if file is loaded and contain markers
-                    WMapMarkerFile userFile = _markerFiles.Where(f => f.Name == USER_MARKERS_FILE).FirstOrDefault();
-
-                    if (userFile == null)
-                    {
-                        return;
-                    }
-
-                    UserMarkersGump existingGump = UIManager.GetGump<UserMarkersGump>();
-
-                    existingGump?.Dispose();
-                    UIManager.Add(new UserMarkersGump(World, _mouseCenter.X, _mouseCenter.Y, userFile.Markers));
-                }
             }
         }
 
         base.OnMouseDown(x, y, button);
     }
 
-    protected override void OnMouseOver(int x, int y)
+    /// <summary>
+    /// Dispatches a WorldMapPathfinder search and hands the result to the walker.
+    /// Registers an on-step-failed hook so dynamic obstacles get added to the dynamic-block
+    /// set and the search retried up to MAX_NAV_REPLANS times.
+    /// </summary>
+    private void StartNavPath(int mapIndex, int startX, int startY, sbyte startZ, int destX, int destY, bool firstAttempt)
+    {
+        var houseMultis = BuildHouseMultiSnapshot();
+
+        WorldMapPathfinder.FindPathAsync(mapIndex, startX, startY, startZ, destX, destY, 8, path =>
+        {
+            if (path == null || path.Count == 0)
+            {
+                if (firstAttempt)
+                    GameActions.Print("Can't find a path there.");
+                _navDest = null;
+                _navPath = null;
+                return;
+            }
+
+            var pathPoints = new List<(int X, int Y, int Z, int Direction)>(path.Count);
+            var navRender = new List<Point>(path.Count);
+            foreach (var p in path)
+            {
+                pathPoints.Add((p.X, p.Y, p.Z, p.Direction));
+                navRender.Add(new Point(p.X, p.Y));
+            }
+            _navPath = navRender;
+
+            // Unsubscribe any stale handler from a previous plan before registering the new one.
+            if (_navStepFailedHandler != null)
+                _world.Player.Pathfinder.OnComputedPathStepFailed -= _navStepFailedHandler;
+
+            _navStepFailedHandler = (blockX, blockY) =>
+            {
+                if (_navReplansLeft <= 0 || !_navDest.HasValue)
+                {
+                    _navDest = null;
+                    _navPath = null;
+                    return;
+                }
+
+                _navReplansLeft--;
+                WorldMapPathfinder.MarkDynamicBlock(blockX, blockY);
+
+                var dest = _navDest.Value;
+                StartNavPath(_world.Map.Index, _world.Player.X, _world.Player.Y, _world.Player.Z,
+                             dest.X, dest.Y, firstAttempt: false);
+            };
+            _world.Player.Pathfinder.OnComputedPathStepFailed += _navStepFailedHandler;
+
+            _world.Player.Pathfinder.StartComputedPath(pathPoints, run: true);
+        }, houseMultis);
+    }
+
+    /// <summary>
+    /// Shallow-copies Multi component fields from every loaded player house into a flat
+    /// list of plain structs. Runs on the main thread where live World data is safe to
+    /// iterate, but does NO filtering and NO map-file I/O — just field reads (~20 ns each).
+    /// The background thread (WorldMapPathfinder) does the flag checks and Z lookups.
+    /// </summary>
+    private List<WorldMapPathfinder.HouseMultiSnapshot> BuildHouseMultiSnapshot()
+    {
+        var houseManager = _world?.HouseManager;
+        if (houseManager == null)
+            return null;
+
+        var list = new List<WorldMapPathfinder.HouseMultiSnapshot>(256);
+        foreach (var house in houseManager.Houses)
+        {
+            foreach (var multi in house.Components)
+            {
+                list.Add(new WorldMapPathfinder.HouseMultiSnapshot
+                {
+                    X = multi.X,
+                    Y = multi.Y,
+                    Z = multi.Z,
+                    Graphic = multi.Graphic,
+                    State = (int)multi.State,
+                    IsHousePreview = multi.IsHousePreview,
+                    IsDestroyed = multi.IsDestroyed,
+                });
+            }
+        }
+        return list;
+    }
+
+    public override void OnMouseOver(int x, int y)
     {
         _lastMousePosition = new Point(x, y);
 
@@ -3348,7 +3583,7 @@ public class WorldMapGump : ResizableGump
         }
     }
 
-    protected override void OnMouseWheel(MouseEventType delta)
+    public override void OnMouseWheel(MouseEventType delta)
     {
         if (delta == MouseEventType.WheelScrollUp)
         {
@@ -3373,7 +3608,7 @@ public class WorldMapGump : ResizableGump
         base.OnMouseWheel(delta);
     }
 
-    protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+    public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
     {
         if (button != MouseButtonType.Left || _isScrolling || Keyboard.Alt)
         {

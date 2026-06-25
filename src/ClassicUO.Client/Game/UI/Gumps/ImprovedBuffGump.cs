@@ -1,7 +1,6 @@
 ﻿using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.UI.Controls;
-using ClassicUO.Renderer;
 using System;
 using System.Collections.Generic;
 using System.Xml;
@@ -10,19 +9,22 @@ namespace ClassicUO.Game.UI.Gumps
 {
     public class ImprovedBuffGump : Gump
     {
-        public const int HEIGHT = CoolDownBar.COOL_DOWN_HEIGHT * (BuffBarManager.MAX_COOLDOWN_BARS + 2);
+        private const int PADDING_HANDLE = 13;
+        private const int BAR_GAP = 2;
+
         private GumpPic _background;
         private Button _button;
         private bool _direction = false;
         private ushort _graphic = 2091;
         private DataBox _box;
+        private int _lastBarCount;
 
         public ImprovedBuffGump(World world) : base(world, 0, 0)
         {
             X = 100;
             Y = 100;
             Width = CoolDownBar.COOL_DOWN_WIDTH;
-            Height = HEIGHT;
+            Height = PADDING_HANDLE;
             CanMove = true;
             CanCloseWithRightClick = true;
             AcceptMouseInput = false;
@@ -34,55 +36,94 @@ namespace ClassicUO.Game.UI.Gumps
         {
             if (icon != null)
             {
-                var coolDownBar = new CoolDownBar(World, TimeSpan.FromMilliseconds(icon.Timer - Time.Ticks), icon.Title.Replace("<br>", " "), ProfileManager.CurrentProfile.ImprovedBuffBarHue, 0, 0, icon.Graphic, icon.Type, true);
+                var coolDownBar = new CoolDownBar(World, TimeSpan.FromMilliseconds(icon.Timer - Time.Ticks), (icon.Title ?? string.Empty).Replace("<br>", " "), ProfileManager.CurrentProfile.ImprovedBuffBarHue, 0, 0, icon.Graphic, icon.Type, true);
                 coolDownBar.SetTooltip(icon.Text);
                 BuffBarManager.AddCoolDownBar(coolDownBar, _direction, _box);
                 _box.Add(coolDownBar);
+                UpdateSize();
             }
         }
 
         public void RemoveBuff(BuffIconType graphic)
         {
             BuffBarManager.RemoveBuffType(graphic);
-            BuffBarManager.UpdatePositions(_direction, _box);
+            UpdateSize();
         }
 
         private void SwitchDirections()
         {
-            _box.Height = HEIGHT;
-            _box.Y = 0;
+            int dynamicHeight = CalculateDynamicHeight();
             if (!_direction)
             {
-                _background.Y = HEIGHT - 11;
-                Y -= HEIGHT - 11;
+                Y -= dynamicHeight - 11;
+                _background.Y = dynamicHeight - 11;
             }
             else
             {
+                Y += dynamicHeight - 11;
                 _background.Y = 0;
-                Y += HEIGHT - 11;
             }
+            Height = dynamicHeight;
+            _box.Height = dynamicHeight;
+            _box.Y = 0;
             _button.Y = _background.Y - 5;
+            _lastBarCount = BuffBarManager.GetActiveBarCount();
             BuffBarManager.UpdatePositions(_direction, _box);
         }
 
         protected override void UpdateContents()
         {
             base.UpdateContents();
-            _box.Height = HEIGHT;
+            UpdateSize();
+        }
+
+        public override void PreDraw()
+        {
+            base.PreDraw();
+
+            int currentCount = BuffBarManager.GetActiveBarCount();
+            if (currentCount != _lastBarCount)
+            {
+                UpdateSize();
+            }
+        }
+
+        private int CalculateDynamicHeight()
+        {
+            int barCount = BuffBarManager.GetActiveBarCount();
+            if (barCount == 0)
+                return PADDING_HANDLE;
+
+            return PADDING_HANDLE + barCount * (CoolDownBar.COOL_DOWN_HEIGHT + BAR_GAP);
+        }
+
+        private void UpdateSize()
+        {
+            int newHeight = CalculateDynamicHeight();
+            int oldHeight = Height;
+
+            if (!_direction && newHeight != oldHeight)
+            {
+                Y -= newHeight - oldHeight;
+            }
+
+            Height = newHeight;
+            _box.Height = newHeight;
             _box.Y = 0;
+
             if (!_direction)
             {
-                _background.Y = HEIGHT - 11;
+                _background.Y = newHeight - 11;
             }
             else
             {
                 _background.Y = 0;
             }
+
             _button.Y = _background.Y - 5;
+            _lastBarCount = BuffBarManager.GetActiveBarCount();
             BuffBarManager.UpdatePositions(_direction, _box);
         }
-
-        public override void Update() => base.Update();
 
         public override void OnButtonClick(int buttonID)
         {
@@ -103,7 +144,7 @@ namespace ClassicUO.Game.UI.Gumps
                 ButtonAction = ButtonAction.Activate
             };
 
-            _box = new DataBox(0, 0, Width, HEIGHT);
+            _box = new DataBox(0, 0, Width, PADDING_HANDLE);
 
 
 
@@ -122,19 +163,20 @@ namespace ClassicUO.Game.UI.Gumps
             UpdateContents();
         }
 
-        public ImprovedBuffGump(World world, int x, int y) : this(world)
-        {
-            X = x;
-            Y = y;
-        }
-
         public override void Save(XmlTextWriter writer)
         {
-            base.Save(writer);
+            //Need to override base here, don't call it.
+
+            writer.WriteAttributeString("type", ((int)GumpType).ToString());
+            writer.WriteAttributeString("x", X.ToString());
+            writer.WriteAttributeString("y", (_direction ? Y : Bounds.Bottom - _background.Height - 7).ToString());
+            writer.WriteAttributeString("serial", LocalSerial.ToString());
+            writer.WriteAttributeString("serverSerial", ServerSerial.ToString());
+            writer.WriteAttributeString("isLocked", IsLocked.ToString());
+            writer.WriteAttributeString("alphaOffset", AlphaOffset.ToString());
+
             writer.WriteAttributeString("graphic", _graphic.ToString());
             writer.WriteAttributeString("updown", _direction.ToString());
-            writer.WriteAttributeString("lastX", X.ToString());
-            writer.WriteAttributeString("lastY", Y.ToString());
         }
 
         public override void Restore(XmlElement xml)
@@ -143,19 +185,28 @@ namespace ClassicUO.Game.UI.Gumps
 
             _graphic = ushort.Parse(xml.GetAttribute("graphic"));
             _direction = bool.Parse(xml.GetAttribute("updown"));
-            int.TryParse(xml.GetAttribute("lastX"), out X);
-            int.TryParse(xml.GetAttribute("lastY"), out Y);
+
             RequestUpdateContents();
         }
 
         public override GumpType GumpType => GumpType.Buff;
 
-        public override bool Draw(UltimaBatcher2D batcher, int x, int y) => base.Draw(batcher, x, y);
-
         private static class BuffBarManager
         {
             public const int MAX_COOLDOWN_BARS = 20;
             private static CoolDownBar[] coolDownBars = new CoolDownBar[MAX_COOLDOWN_BARS];
+
+            public static int GetActiveBarCount()
+            {
+                int count = 0;
+                for (int i = 0; i < coolDownBars.Length; i++)
+                {
+                    if (coolDownBars[i] != null && !coolDownBars[i].IsDisposed)
+                        count++;
+                }
+                return count;
+            }
+
             public static void AddCoolDownBar(CoolDownBar coolDownBar, bool topDown, DataBox _boxContainer)
             {
                 for (int i = 0; i < coolDownBars.Length; i++)
@@ -179,17 +230,18 @@ namespace ClassicUO.Game.UI.Gumps
             public static void UpdatePositions(bool topDown, DataBox _boxContainer)
             {
                 int actualI = 0;
+                int barStride = CoolDownBar.COOL_DOWN_HEIGHT + BAR_GAP;
                 for (int i = 0; i < coolDownBars.Length; i++)
                 {
                     if (coolDownBars[i] != null && !coolDownBars[i].IsDisposed)
                     {
                         if (topDown)
                         {
-                            coolDownBars[i].Y = (actualI * (CoolDownBar.COOL_DOWN_HEIGHT + 2)) + 13;
+                            coolDownBars[i].Y = (actualI * barStride) + PADDING_HANDLE;
                         }
                         else
                         {
-                            coolDownBars[i].Y = _boxContainer.Height - ((actualI + 1) * (CoolDownBar.COOL_DOWN_HEIGHT + 2)) - 11;
+                            coolDownBars[i].Y = _boxContainer.Height - ((actualI + 1) * barStride) - 11;
                         }
                         actualI++;
                     }

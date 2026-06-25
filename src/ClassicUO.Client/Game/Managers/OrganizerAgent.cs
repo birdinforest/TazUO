@@ -4,8 +4,10 @@ using System.IO;
 using System.Linq;
 using System.Text.Json.Serialization;
 using System.Timers;
+using ClassicUO.Common.Enums;
 using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
+using ClassicUO.Game.Managers.Structs;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
 using ClassicUO.Utility;
@@ -70,6 +72,49 @@ namespace ClassicUO.Game.Managers
         }
 
         public void Save() => JsonHelper.SaveAndBackup(OrganizerConfigs, Path.Combine(GetDataPath(), "OrganizerConfig.json"), OrganizerAgentContext.Default.ListOrganizerConfig);
+
+        public OrganizerConfig FindConfig(string nameOrIndex)
+        {
+            if (string.IsNullOrWhiteSpace(nameOrIndex))
+                return null;
+
+            nameOrIndex = nameOrIndex.Trim();
+
+            if (int.TryParse(nameOrIndex, out int index))
+            {
+                if (index >= 0 && index < OrganizerConfigs.Count)
+                    return OrganizerConfigs[index];
+
+                return null;
+            }
+
+            return OrganizerConfigs.FirstOrDefault(c => c.Name.Equals(nameOrIndex, StringComparison.OrdinalIgnoreCase));
+        }
+
+        public void SetSourceContainerViaTarget(string nameOrIndex)
+        {
+            OrganizerConfig config = FindConfig(nameOrIndex);
+            if (config == null)
+            {
+                GameActions.Print(World.Instance, $"Organizer '{nameOrIndex}' not found.", Constants.HUE_ERROR);
+                return;
+            }
+
+            GameActions.Print(World.Instance, $"Target the source container for organizer '{config.Name}'.");
+            World.Instance.TargetManager.SetTargeting((o) =>
+            {
+                if (o is Item item && item.ItemData.IsContainer)
+                {
+                    config.SourceContSerial = item.Serial;
+                    Save();
+                    GameActions.Print(World.Instance, $"Source container for organizer '{config.Name}' set.", Constants.HUE_SUCCESS);
+                }
+                else
+                {
+                    GameActions.Print(World.Instance, "That doesn't appear to be a valid container.", Constants.HUE_ERROR);
+                }
+            });
+        }
 
         public static void Unload()
         {
@@ -278,7 +323,7 @@ namespace ClassicUO.Game.Managers
                         if (!item.ItemData.IsStackable) continue; // non-stackable items can't be organized in the same container
 
                         ushort amountToMove = itemConfig.Amount > 0 ? itemConfig.Amount : ushort.MaxValue;
-                        MoveItemQueue.Instance?.Enqueue(item.Serial, thisDestCont.Serial, amountToMove, 0xFFFF, 0xFFFF, 0);
+                        ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, amountToMove).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                         totalItemsMoved++;
                     }
                 }
@@ -301,7 +346,7 @@ namespace ClassicUO.Game.Managers
                         if (itemConfig.Amount == 0)
                         {
                             // Move all items of this type
-                            MoveItemQueue.Instance?.Enqueue(item.Serial, thisDestCont.Serial, ushort.MaxValue, 0xFFFF, 0xFFFF, 0);
+                            ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, ushort.MaxValue).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                             totalItemsMoved++;
                         }
                         else
@@ -312,7 +357,7 @@ namespace ClassicUO.Game.Managers
                             if (toMove > 0)
                             {
                                 ushort actualAmount = (ushort)Math.Min(toMove, item.Amount);
-                                MoveItemQueue.Instance?.Enqueue(item.Serial, thisDestCont.Serial, actualAmount, 0xFFFF, 0xFFFF, 0);
+                                ObjectActionQueue.Instance.Enqueue(new MoveRequest(item.Serial, thisDestCont.Serial, actualAmount).ToObjectActionQueueItem(), ActionPriority.MoveItem);
                                 // Update the count to avoid over-moving if multiple stacks exist in source
                                 destItemCounts[(item.Graphic, item.Hue)] = existingCount + actualAmount;
                                 totalItemsMoved++;
@@ -324,7 +369,7 @@ namespace ClassicUO.Game.Managers
 
             if (totalItemsMoved > 0)
             {
-                GameActions.Print($"Organizing {totalItemsMoved} items from '{config.Name}'...", 63);
+                GameActions.Print($"Organizing {totalItemsMoved} items from '{config.Name}'...", Constants.HUE_SUCCESS);
             }
 
             return totalItemsMoved;
@@ -334,7 +379,7 @@ namespace ClassicUO.Game.Managers
         {
             if (!config.Enabled)
             {
-                GameActions.Print(World.Instance, $"Organizer '{config.Name}' is disabled.", 33);
+                GameActions.Print(World.Instance, $"Organizer '{config.Name}' is disabled.", Constants.HUE_ERROR);
                 return;
             }
 
@@ -364,20 +409,60 @@ namespace ClassicUO.Game.Managers
 
             if (destCont == null)
             {
-                GameActions.Print(World.Instance, $"Cannot find destination container for organizer '{config.Name}' (Serial: {config.DestContSerial:X})", 33);
+                GameActions.Print(World.Instance, $"Cannot find destination container for organizer '{config.Name}' (Serial: {config.DestContSerial:X})", Constants.HUE_ERROR);
                 return;
             }
 
             int organized = OrganizeItems(sourceCont, destCont, config);
             if (organized == 0)
             {
-                GameActions.Print(World.Instance, $"No items were organized by '{config.Name}'.", 33);
+                GameActions.Print(World.Instance, $"No items were organized by '{config.Name}'.", Constants.HUE_ERROR);
             }
+        }
+
+        #nullable enable
+        public string? GetJsonExport(OrganizerConfig config)
+        {
+            try
+            {
+                return System.Text.Json.JsonSerializer.Serialize(config, OrganizerAgentContext.Default.OrganizerConfig);
+            }
+            catch (Exception e)
+            {
+                Utility.Logging.Log.Error($"Error exporting organizer to JSON: {e}");
+            }
+
+            return null;
+        }
+        #nullable disable
+
+        public bool ImportFromJson(string json)
+        {
+            try
+            {
+                OrganizerConfig importedConfig = System.Text.Json.JsonSerializer.Deserialize(json, OrganizerAgentContext.Default.OrganizerConfig);
+
+                if (importedConfig != null)
+                {
+                    importedConfig.Name = GetUniqueName(importedConfig.Name);
+                    importedConfig.Enabled = false;
+                    OrganizerConfigs.Add(importedConfig);
+                    GameActions.Print($"Imported organizer '{importedConfig.Name}' with {importedConfig.ItemConfigs.Count} items!", Constants.HUE_SUCCESS);
+                    return true;
+                }
+            }
+            catch (Exception e)
+            {
+                Utility.Logging.Log.Error($"Error importing organizer from JSON: {e}");
+            }
+
+            return false;
         }
 
     }
 
     [JsonSerializable(typeof(List<OrganizerConfig>))]
+    [JsonSerializable(typeof(OrganizerConfig))]
     internal partial class OrganizerAgentContext : JsonSerializerContext
     { }
 

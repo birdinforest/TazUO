@@ -19,6 +19,7 @@ namespace ClassicUO.Game.UI
         private TextBox _textBox;
         private string _textHTML;
         private readonly World _world;
+        private Item _item;
 
         public Tooltip(World world)
         {
@@ -36,7 +37,19 @@ namespace ClassicUO.Game.UI
 
         public bool IsEmpty => Text == null;
 
-        public uint Serial { get; private set; }
+        public uint Serial
+        {
+            get => field;
+            private set
+            {
+                field = value;
+
+                _item = null;
+
+                if(SerialHelper.IsItem(field))
+                    _item = _world.Items.Get(field);
+            }
+        }
 
         public bool Draw(UltimaBatcher2D batcher, int x, int y)
         {
@@ -95,6 +108,9 @@ namespace ClassicUO.Game.UI
                 if (string.IsNullOrEmpty(finalString) && !string.IsNullOrEmpty(_textHTML)) //Fix for vendor search
                     finalString = Managers.ToolTipOverrideData.ProcessTooltipText(_textHTML);
 
+                if (_item?.CustomName.NotNullNotEmpty() == true) //Add custom item name
+                    finalString = $"[{_item.CustomName}]\n" + finalString;
+
                 if (_textBox == null || _textBox.IsDisposed)
                 {
                     string font = TrueTypeLoader.EMBEDDED_FONT;
@@ -131,25 +147,25 @@ namespace ClassicUO.Game.UI
                 return false;
             }
 
-            int z_width = _textBox.Width + 8;
-            int z_height = _textBox.Height + 8;
+            int z_width = (int)((_textBox.Width + 8) * Client.Game.RenderScale);
+            int z_height = (int)((_textBox.Height + 8) * Client.Game.RenderScale);
 
             if (x < 0)
             {
                 x = 0;
             }
-            else if (x > Client.Game.Window.ClientBounds.Width - z_width)
+            else if (x > (Client.Game.Window.ClientBounds.Width / Client.Game.RenderScale)- z_width)
             {
-                x = Client.Game.Window.ClientBounds.Width - z_width;
+                x = (int)((Client.Game.Window.ClientBounds.Width / Client.Game.RenderScale) - z_width);
             }
 
             if (y < 0)
             {
                 y = 0;
             }
-            else if (y > Client.Game.Window.ClientBounds.Height - z_height)
+            else if (y > (Client.Game.Window.ClientBounds.Height / Client.Game.RenderScale) - z_height)
             {
-                y = Client.Game.Window.ClientBounds.Height - z_height;
+                y = (int)((Client.Game.Window.ClientBounds.Height / Client.Game.RenderScale) - z_height);
             }
 
             X = x - 4;
@@ -233,56 +249,53 @@ namespace ClassicUO.Game.UI
             if (SerialHelper.IsValid(serial) && _world.OPL.TryGetNameAndData(serial, out string name, out string data))
             {
                 var sbHTML = new ValueStringBuilder();
+                var sb = new ValueStringBuilder();
+
+                if (!string.IsNullOrEmpty(name))
                 {
-                    var sb = new ValueStringBuilder();
+                    if (SerialHelper.IsItem(serial))
                     {
-                        if (!string.IsNullOrEmpty(name))
+                        sbHTML.Append("/c[yellow]");
+                        hasStartColor = true;
+                    }
+                    else
+                    {
+                        Mobile mob = _world.Mobiles.Get(serial);
+
+                        if (mob != null)
                         {
-                            if (SerialHelper.IsItem(serial))
-                            {
-                                sbHTML.Append("<basefont color=\"yellow\">");
-                                hasStartColor = true;
-                            }
-                            else
-                            {
-                                Mobile mob = _world.Mobiles.Get(serial);
-
-                                if (mob != null)
-                                {
-                                    sbHTML.Append(Notoriety.GetHTMLHue(mob.NotorietyFlag));
-                                    hasStartColor = true;
-                                }
-                            }
-
-                            sb.Append(name);
-                            sbHTML.Append(name);
-
-                            if (hasStartColor)
-                            {
-                                sbHTML.Append("<basefont color=\"#FFFFFFFF\">");
-                            }
+                            sbHTML.Append(Notoriety.GetHTMLHue(mob.NotorietyFlag));
+                            hasStartColor = true;
                         }
+                    }
 
-                        if (!string.IsNullOrEmpty(data))
-                        {
-                            sb.Append('\n');
-                            sb.Append(data);
-                            sbHTML.Append('\n');
-                            sbHTML.Append(data);
-                        }
+                    sb.Append(name);
+                    sbHTML.Append(name);
 
-                        htmltext = sbHTML.ToString();
-                        result = sb.ToString();
-
-                        sb.Dispose();
-                        sbHTML.Dispose();
+                    if (hasStartColor)
+                    {
+                        sbHTML.Append("/c[#ffffff]");
                     }
                 }
+
+                if (!string.IsNullOrEmpty(data))
+                {
+                    sb.Append('\n');
+                    sb.Append(data);
+                    sbHTML.Append('\n');
+                    sbHTML.Append(data);
+                }
+
+                htmltext = sbHTML.ToString();
+                result = sb.ToString();
+
+                sb.Dispose();
+                sbHTML.Dispose();
             }
             return string.IsNullOrEmpty(result) ? null : result;
         }
 
-        public void SetText(string text, int maxWidth = 0)
+        public void SetText(string text)
         {
             if (ProfileManager.CurrentProfile != null && !ProfileManager.CurrentProfile.UseTooltip)
             {

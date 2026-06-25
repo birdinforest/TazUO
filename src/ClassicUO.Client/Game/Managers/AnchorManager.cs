@@ -6,6 +6,7 @@ using System.Linq;
 using System.Xml;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
+using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
 
 namespace ClassicUO.Game.Managers
@@ -165,8 +166,8 @@ namespace ClassicUO.Game.Managers
 
         private (Point?, AnchorableGump) GetAnchorDirection(AnchorableGump draggedControl, AnchorableGump host)
         {
-            int xdistancescale = Math.Abs(draggedControl.X - host.X) * 100 / host.Width;
-            int ydistancescale = Math.Abs(draggedControl.Y - host.Y) * 100 / host.Height;
+            int xdistancescale = Math.Abs(draggedControl.X - host.X) * 100 / host.Width.NotZero;
+            int ydistancescale = Math.Abs(draggedControl.Y - host.Y) * 100 / host.Height.NotZero;
 
             if (xdistancescale > ydistancescale)
             {
@@ -211,22 +212,22 @@ namespace ClassicUO.Game.Managers
             AnchorableGump closestControl = null;
             int closestDistance = 99999;
 
-            foreach (Gump c in UIManager.Gumps)
+            UIManager.ForEach<AnchorableGump>(g =>
             {
-                if (!c.IsDisposed && c is AnchorableGump host && host.AnchorType == control.AnchorType)
+                if (g.AnchorType == control.AnchorType)
                 {
-                    if (IsOverlapping(control, host))
+                    if (IsOverlapping(control, g))
                     {
-                        int dirtyDistance = Math.Abs(control.X - host.X) + Math.Abs(control.Y - host.Y);
+                        int dirtyDistance = Math.Abs(control.X - g.X) + Math.Abs(control.Y - g.Y);
 
                         if (dirtyDistance < closestDistance)
                         {
                             closestDistance = dirtyDistance;
-                            closestControl = host;
+                            closestControl = g;
                         }
                     }
                 }
-            }
+            });
 
             return closestControl;
         }

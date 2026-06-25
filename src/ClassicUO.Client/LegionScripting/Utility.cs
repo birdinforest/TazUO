@@ -1,5 +1,7 @@
-﻿using System;
+using System;
+using System.Collections;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using ClassicUO.Game;
 using ClassicUO.Game.Data;
@@ -167,6 +169,8 @@ internal static class Utility
                 case Direction.South: return "south";
                 case Direction.Left: return "southwest";
                 case Direction.West: return "west";
+                case Direction.Running:
+                case Direction.NONE: //Running north for some reason is resulting in NONE, so we'll default it to northwest.
                 case Direction.Up: return "northwest";
                 default: return "none";
             }
@@ -205,9 +209,9 @@ internal static class Utility
         }
     }
 
-    public static Item FindNearestCorpsePython(int distance, API api) => World.Items.Values.Where(c => c.IsCorpse && c.Distance <= distance && !api.OnIgnoreList(c)).OrderBy(c => c.Distance).FirstOrDefault();
+    public static Item FindNearestCorpsePython(int distance, LegionAPI api) => World.Items.Values.Where(c => c.IsCorpse && c.Distance <= distance && !api.OnIgnoreList(c)).OrderBy(c => c.Distance).FirstOrDefault();
 
-    public static uint FindNearestCheckPythonIgnore(ScanTypeObject scanType, API api)
+    public static uint FindNearestCheckPythonIgnore(ScanTypeObject scanType, LegionAPI api)
     {
         int distance = int.MaxValue;
         uint serial = 0;
@@ -268,5 +272,70 @@ internal static class Utility
         }
 
         return Color.Black;
+    }
+
+
+
+    /// <summary>
+    ///     Converts the given values into an array of <see cref="LegionAPI.Notoriety" />
+    ///     Throws if any value is not a valid notoriety
+    /// </summary>
+    /// <param name="values"></param>
+    /// <returns>An array of notoriety values in the same order as provided</returns>
+    /// <exception cref="InvalidEnumArgumentException">
+    ///     One or more given values are not valid <see cref="LegionAPI.Notoriety" />
+    /// </exception>
+    public static LegionAPI.Notoriety[] ConvertNotorietyOrThrow(IEnumerable values) =>
+        values is null
+            ? []
+            : (from object item in values select ConvertNotorietyOrThrow(item)).ToArray();
+
+
+    /// <summary>
+    ///     Converts a given value to <see cref="LegionAPI.Notoriety" />.
+    ///     Throws if conversion fails.
+    /// </summary>
+    /// <param name="value">The value to convert</param>
+    /// <returns>The converted notoriety value</returns>
+    /// <exception cref="InvalidEnumArgumentException">The given value is not a valid <see cref="LegionAPI.Notoriety" /></exception>
+    public static LegionAPI.Notoriety ConvertNotorietyOrThrow(object value)
+    {
+        if (!TryConvertToNotoriety(value, out LegionAPI.Notoriety notoriety))
+            throw new InvalidEnumArgumentException(
+                $"Notoriety value '{value}' is not valid");
+
+        return notoriety;
+    }
+
+    /// <summary>
+    ///     Tries to convert a given value to an <see cref="LegionAPI.Notoriety" /> value
+    /// </summary>
+    /// <param name="value">The value to convert</param>
+    /// <param name="notoriety">The conversion result</param>
+    /// <returns>True if the given value is a valid notoriety, false otherwise</returns>
+    public static bool TryConvertToNotoriety(object value, out LegionAPI.Notoriety notoriety)
+    {
+        switch (value)
+        {
+            case LegionAPI.Notoriety n:
+                notoriety = n;
+                return Enum.IsDefined(n);
+
+            case string s:
+                return Enum.TryParse(s, true, out notoriety)
+                       && Enum.IsDefined(notoriety);
+
+            case int i:
+                notoriety = (LegionAPI.Notoriety)i;
+                return Enum.IsDefined(notoriety);
+
+            case uint u:
+                notoriety = (LegionAPI.Notoriety)u;
+                return Enum.IsDefined(notoriety);
+
+            default:
+                notoriety = LegionAPI.Notoriety.Unknown;
+                return false;
+        }
     }
 }

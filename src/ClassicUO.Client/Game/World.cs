@@ -136,6 +136,7 @@ namespace ClassicUO.Game
 
         public Season Season { get; private set; } = Season.Summer;
         public Season OldSeason { get; set; } = Season.Summer;
+        public Season RealSeason { get; set; } = Season.Summer;
 
         public int OldMusicIndex { get; set; }
 
@@ -211,6 +212,37 @@ namespace ClassicUO.Game
 
         public bool InGame => Player != null && Map != null;
 
+        public void ReloadCurrentMap()
+        {
+            if (Map == null)
+                return;
+
+            int index = Map.Index;
+
+            InternalMapChangeClear(true);
+
+            ushort x = Player.X;
+            ushort y = Player.Y;
+            sbyte z = Player.Z;
+
+            Map.Destroy();
+            Map = null;
+
+            if (index < 0 || index >= MapLoader.MAPS_COUNT)
+                index = 0;
+
+            Client.Game.UO.FileManager.Maps.LoadMap(index, ClientFeatures.Flags.HasFlag(CharacterListFlags.CLF_UNLOCK_FELUCCA_AREAS));
+            Map = new Map.Map(this, index);
+
+            Player.SetInWorldTile(x, y, z);
+            Player.ClearSteps();
+
+            if (Client.Game.UO.GameCursor != null)
+            {
+                Client.Game.UO.GameCursor.Graphic = 0xFFFF;
+            }
+        }
+
         public IsometricLight Light { get; } = new IsometricLight
         {
             Overall = 0,
@@ -237,6 +269,9 @@ namespace ClassicUO.Game
                 {
                     _corpses.Add(item);
                 }
+
+                // Reapply the looted hue if this corpse was previously looted and hued.
+                AutoLootManager.ApplyLootedHueIfNeeded(item);
             }
         }
 
@@ -286,7 +321,7 @@ namespace ClassicUO.Game
             Log.Trace($"Player [0x{serial:X8}] created");
         }
 
-        public void ChangeSeason(Season season, int music)
+        public void ChangeSeason(Season season, int music = -1)
         {
             Season = season;
 
@@ -310,6 +345,9 @@ namespace ClassicUO.Game
             {
                 Log.Error("Failed to change season: " + e);
             }
+
+            if (music == -1)
+                return;
 
             UOMusic currentMusic = Client.Game.Audio.GetCurrentMusic();
             if (currentMusic == null || currentMusic.Index == Client.Game.Audio.LoginMusicIndex)
@@ -677,6 +715,7 @@ namespace ClassicUO.Game
 
             if (mobile == null || mobile.IsDestroyed)
             {
+                HealthbarCollectorGump.MobileDestroyed(serial);
                 return false;
             }
 
@@ -698,6 +737,8 @@ namespace ClassicUO.Game
             {
                 Mobiles.Remove(serial);
             }
+
+            HealthbarCollectorGump.MobileDestroyed(serial);
 
             return true;
         }

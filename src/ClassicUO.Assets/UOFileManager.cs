@@ -145,6 +145,8 @@ namespace ClassicUO.Assets
 
             Maps.MapsLayouts = mapsLayouts;
 
+            Task[] asyncedLoading = [Task.Factory.StartNew(TrueTypeLoader.Instance.Load)];
+
             Animations.Load();
             AnimData.Load();
             Arts.Load();
@@ -165,18 +167,15 @@ namespace ClassicUO.Assets
             TileArt.Load();
             StringDictionary.Load();
 
-            PNGLoader.Instance.Load();
-            TrueTypeLoader.Instance.Load();
+            PNGLoader.Instance.Load(BasePath);
+            //TrueTypeLoader.Instance.Load();
 
             ReadArtDefFile();
 
             UOFileMul verdata = Verdata.File;
             bool forceVerdata = Version < ClientVersion.CV_500A || verdata != null && verdata.Length != 0 && Verdata.Patches.Length != 0;
 
-            if (!useVerdata && forceVerdata)
-            {
-                useVerdata = true;
-            }
+            if (!useVerdata && forceVerdata) useVerdata = true;
 
             Log.Trace($"Use verdata.mul: {(useVerdata ? "Yes" : "No")}");
 
@@ -358,9 +357,10 @@ namespace ClassicUO.Assets
                 }
             }
 
+            Task.WaitAll(asyncedLoading);
 
-            Log.Trace($"Files loaded in: {stopwatch.ElapsedMilliseconds} ms!");
             stopwatch.Stop();
+            Log.Trace($"Files loaded in: {stopwatch.ElapsedMilliseconds} ms!");
         }
 
         private void ReadArtDefFile()

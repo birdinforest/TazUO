@@ -29,6 +29,9 @@ public enum HideHudFlags : ulong //Up to 63 gump types for ulong
     ScriptManagerGump = 1 << 20,
     PlayerChar = 1 << 21,
     Mouse = 1 << 22,
+    HealthBarCollector = 1 << 23,
+    AbilityButtons = 1 << 24,
+    DebugGump = 1 << 25,
 
-    All = (1UL << 23) - 1 //Update 23 if more are added
+    All = (1UL << 26) - 1 //Update this if more are added
 }

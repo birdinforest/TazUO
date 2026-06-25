@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using System.Xml;
@@ -14,7 +14,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using SDL3;
 using ClassicUO.Assets;
-using System.Text.Json.Serialization;
 
 namespace ClassicUO.Game.UI.Gumps
 {
@@ -236,8 +235,16 @@ namespace ClassicUO.Game.UI.Gumps
             return max;
         }
 
+        protected override void OnDragBegin(int x, int y)
+        {
+            _world.DelayedObjectClickManager.Clear(LocalSerial);
+            base.OnDragBegin(x, y);
+        }
+
         protected override void OnDragEnd(int x, int y)
         {
+            _world.DelayedObjectClickManager.Clear(LocalSerial);
+
             // when dragging an healthbar with target on, we have to reset the dclick timer
             if (World.TargetManager.IsTargeting)
             {
@@ -248,7 +255,7 @@ namespace ClassicUO.Game.UI.Gumps
             base.OnDragEnd(x, y);
         }
 
-        protected override void OnMouseUp(int x, int y, MouseButtonType button)
+        public override void OnMouseUp(int x, int y, MouseButtonType button)
         {
             base.OnMouseUp(x, y, button);
 
@@ -285,7 +292,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseDown(int x, int y, MouseButtonType button)
+        public override void OnMouseDown(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left)
             {
@@ -298,25 +305,43 @@ namespace ClassicUO.Game.UI.Gumps
                 World.TargetManager.Target(LocalSerial);
                 Mouse.LastLeftButtonClickTime = 0;
             }
-            else if (_canChangeName)
+            else if (_canChangeName && _textBox != null && _textBox.Bounds.Contains(x, y))
             {
-                if (_textBox != null)
-                {
-                    _textBox.IsEditable = false;
-                }
-
+                _textBox.IsEditable = false;
                 UIManager.KeyboardFocusControl = null;
                 UIManager.SystemChat?.SetFocus();
+            }
+            else if (!_world.Player.InWarMode)
+            {
+                if (!_world.DelayedObjectClickManager.IsEnabled)
+                {
+                    _world.DelayedObjectClickManager.Set(
+                        LocalSerial,
+                        Mouse.Position.X,
+                        Mouse.Position.Y,
+                        Time.Ticks + Mouse.MOUSE_DELAY_DOUBLE_CLICK
+                    );
+                }
+
+                if (ProfileManager.CurrentProfile.SingleClickMobileSetsLastTarget)
+                {
+                    World.TargetManager.LastTargetInfo.SetEntity(LocalSerial);
+                }
             }
 
             base.OnMouseDown(x, y, button);
         }
 
-        protected override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
+        public override bool OnMouseDoubleClick(int x, int y, MouseButtonType button)
         {
             if (button != MouseButtonType.Left)
             {
                 return false;
+            }
+
+            if (_world.DelayedObjectClickManager.IsEnabled)
+            {
+                _world.DelayedObjectClickManager.Clear(LocalSerial);
             }
 
             if (_canChangeName)
@@ -355,7 +380,7 @@ namespace ClassicUO.Game.UI.Gumps
             return true;
         }
 
-        protected override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
+        public override void OnKeyDown(SDL.SDL_Keycode key, SDL.SDL_Keymod mod)
         {
             Entity entity = World.Get(LocalSerial);
 
@@ -373,7 +398,7 @@ namespace ClassicUO.Game.UI.Gumps
             }
         }
 
-        protected override void OnMouseOver(int x, int y)
+        public override void OnMouseOver(int x, int y)
         {
             Entity entity = World.Get(LocalSerial);
 
@@ -436,6 +461,12 @@ namespace ClassicUO.Game.UI.Gumps
 
             return false;
         }
+
+        protected bool IsPet(Entity entity) =>
+            entity is Mobile mobile
+            && mobile.IsRenamable
+            && entity != World.Player
+            && !World.Party.Contains(LocalSerial);
     }
 
     public class HealthBarGumpCustom : BaseHealthBarGump
@@ -467,6 +498,7 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly LineCHB[] _border = new LineCHB[4];
 
         private LineCHB _hpLineRed, _manaLineRed, _stamLineRed, _outline;
+        private Button _buttonHeal1, _buttonHeal2;
 
 
         private bool _oldWarMode, _normalHits, _poisoned, _yellowHits;
@@ -492,6 +524,7 @@ namespace ClassicUO.Game.UI.Gumps
 
             _background = null;
             _hpLineRed = _manaLineRed = _stamLineRed = null;
+            _buttonHeal1 = _buttonHeal2 = null;
 
             if (_textBox != null)
             {
@@ -598,6 +631,11 @@ namespace ClassicUO.Game.UI.Gumps
                         }
                     }
 
+                    if (_buttonHeal1 != null && _buttonHeal2 != null)
+                    {
+                        _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = false;
+                    }
+
                     if (_bars[0] != null)
                     {
                         _bars[0].IsVisible = false;
@@ -690,6 +728,11 @@ namespace ClassicUO.Game.UI.Gumps
                         {
                             _manaLineRed.LineColor = _stamLineRed.LineColor = HPB_COLOR_RED;
                         }
+                    }
+
+                    if (_buttonHeal1 != null && _buttonHeal2 != null && IsPet(entity))
+                    {
+                        _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = true;
                     }
 
                     _bars[0].IsVisible = true;
@@ -1329,6 +1372,31 @@ namespace ClassicUO.Game.UI.Gumps
                         )
                     );
 
+                    // Add healing buttons for pets
+                    if (IsPet(entity))
+                    {
+                        Add(_buttonHeal1 = new Button(
+                            (int)ButtonParty.Heal1,
+                            0x0938,
+                            0x093A,
+                            0x0938)
+                        {
+                            ButtonAction = ButtonAction.Activate,
+                            X = 0,
+                            Y = 18
+                        });
+
+                        Add(_buttonHeal2 = new Button(
+                            (int)ButtonParty.Heal2,
+                            0x0939,
+                            0x093A,
+                            0x0939)
+                        {
+                            ButtonAction = ButtonAction.Activate,
+                            X = 0,
+                            Y = 27
+                        });
+                    }
 
                     Add
                     (
@@ -1376,6 +1444,29 @@ namespace ClassicUO.Game.UI.Gumps
                     }
                 }
             }
+        }
+
+        public override void OnButtonClick(int buttonID)
+        {
+            switch ((ButtonParty)buttonID)
+            {
+                case ButtonParty.Heal1:
+                    GameActions.QuickHeal(_world, LocalSerial);
+                    break;
+
+                case ButtonParty.Heal2:
+                    GameActions.QuickCure(_world, LocalSerial);
+                    break;
+            }
+
+            Mouse.CancelDoubleClick = true;
+            Mouse.LastLeftButtonClickTime = 0;
+        }
+
+        private enum ButtonParty
+        {
+            Heal1,
+            Heal2
         }
 
         public override bool Contains(int x, int y) => true;
@@ -1726,6 +1817,32 @@ namespace ClassicUO.Game.UI.Gumps
                     Width = _background.Width;
                     Height = _background.Height;
 
+                    // Add healing buttons for pets
+                    if (IsPet(entity))
+                    {
+                        Add(_buttonHeal1 = new Button(
+                            (int)ButtonParty.Heal1,
+                            0x0938,
+                            0x093A,
+                            0x0938)
+                        {
+                            ButtonAction = ButtonAction.Activate,
+                            X = 0,
+                            Y = 20
+                        });
+
+                        Add(_buttonHeal2 = new Button(
+                            (int)ButtonParty.Heal2,
+                            0x0939,
+                            0x093A,
+                            0x0939)
+                        {
+                            ButtonAction = ButtonAction.Activate,
+                            X = 0,
+                            Y = 33
+                        });
+                    }
+
                     Add
                     (
                         _textBox = new StbTextBox
@@ -1819,7 +1936,10 @@ namespace ClassicUO.Game.UI.Gumps
                             _textBox.Hue = textColor;
                         }
 
-                        _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = false;
+                        if (_buttonHeal1 != null && _buttonHeal2 != null)
+                        {
+                            _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = false;
+                        }
 
                         if (_bars.Length >= 2 && _bars[1] != null)
                         {
@@ -1914,7 +2034,10 @@ namespace ClassicUO.Game.UI.Gumps
 
                     if (inparty)
                     {
-                        _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = true;
+                        if (_buttonHeal1 != null && _buttonHeal2 != null)
+                        {
+                            _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = true;
+                        }
 
                         if (_bars.Length >= 2 && _bars[1] != null)
                         {
@@ -1922,6 +2045,10 @@ namespace ClassicUO.Game.UI.Gumps
 
                             _bars[2].IsVisible = true;
                         }
+                    }
+                    else if (_buttonHeal1 != null && _buttonHeal2 != null && IsPet(entity))
+                    {
+                        _buttonHeal1.IsVisible = _buttonHeal2.IsVisible = true;
                     }
                     _bars[0].IsVisible = true;
                 }
@@ -2065,17 +2192,11 @@ namespace ClassicUO.Game.UI.Gumps
             switch ((ButtonParty)buttonID)
             {
                 case ButtonParty.Heal1:
-                    GameActions.CastSpell(29);
-                    World.Party.PartyHealTimer = Time.Ticks + 50;
-                    World.Party.PartyHealTarget = LocalSerial;
-
+                    GameActions.QuickHeal(_world, LocalSerial);
                     break;
 
                 case ButtonParty.Heal2:
-                    GameActions.CastSpell(11);
-                    World.Party.PartyHealTimer = Time.Ticks + 50;
-                    World.Party.PartyHealTarget = LocalSerial;
-
+                    GameActions.QuickCure(_world, LocalSerial);
                     break;
             }
 

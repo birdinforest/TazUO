@@ -6,7 +6,7 @@ using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
-using ClassicUO.Game.UI.ImGuiControls;
+using ClassicUO.Game.UI.MyraWindows;
 using ClassicUO.Input;
 using System.Threading.Tasks;
 
@@ -34,7 +34,7 @@ namespace ClassicUO.LegionScripting
 
         private List<RecordedAction> _displayedActions = new List<RecordedAction>();
 
-        public ScriptRecordingGump() : base(World.Instance, _lastX, _lastY, _lastWidth, _lastHeight, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BoderSize, false)
+        public ScriptRecordingGump() : base(World.Instance, _lastX, _lastY, _lastWidth, _lastHeight, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BorderSize, false)
         {
             CanCloseWithRightClick = true;
             AcceptMouseInput = true;
@@ -537,7 +537,7 @@ namespace ClassicUO.LegionScripting
             }
             catch (Exception ex)
             {
-                GameActions.Print($"Failed to save script: {ex.Message}");
+                GameActions.Print($"Failed to save script: {ex.Message}", Constants.HUE_ERROR);
             }
         }
 

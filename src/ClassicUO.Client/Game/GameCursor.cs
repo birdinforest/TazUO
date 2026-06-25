@@ -9,12 +9,10 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.Scenes;
 using ClassicUO.Game.UI;
 using ClassicUO.Input;
-using ClassicUO.Assets;
+using ClassicUO.Game.UI.Controls;
 using ClassicUO.Renderer;
-using ClassicUO.Utility;
-using ImGuiNET;
+using ClassicUO.Utility.Logging;
 using Microsoft.Xna.Framework;
-using Microsoft.Xna.Framework.Graphics;
 using SDL3;
 
 namespace ClassicUO.Game
@@ -88,6 +86,12 @@ namespace ClassicUO.Game
         private readonly List<Multi> _temp = new List<Multi>();
         private readonly Tooltip _tooltip;
         private readonly World _world;
+
+        /// <summary>
+        ///     The game cursor's visual style override.
+        ///     When set to a value other than null, the cursor's visual style will be overridden.
+        /// </summary>
+        private GameCursorVisualType? _cursorVisual;
 
         public GameCursor(World world)
         {
@@ -527,6 +531,37 @@ namespace ClassicUO.Game
             }
         }
 
+        /// <summary>
+        /// Overrides the game cursor visual style.
+        /// Set to null to remove the override and revert to the standard behavior.
+        /// <para>
+        /// <b>This is a global override; Discretion is required.</b>
+        /// </para>
+        /// </summary>
+        /// <param name="visual">
+        /// The visual style to use.
+        /// <para>
+        /// Note that additional styles are available but not listed here. See <see cref="_cursorData"/> for a complete list
+        /// </para>
+        /// </param>
+        public void ForceSetCursorVisualStyle(GameCursorVisualType? visual)
+        {
+            if (visual is null)
+            {
+                _cursorVisual = null;
+                return;
+            }
+
+            int index = (int)visual.Value;
+            if (index < 0 || (uint)index >= (uint)_cursorData.GetLength(1))
+            {
+                Log.Warn($"Method was called with an out-of-bounds cursor visual '{visual}'. Ignoring");
+                return; // This is a pretty 'low-value' method, so it's honestly better to ignore than crash here.
+            }
+
+            _cursorVisual = visual;
+        }
+
         private void DrawToolTip(UltimaBatcher2D batcher, Point position)
         {
             if (Client.Game.Scene is GameScene gs)
@@ -589,6 +624,12 @@ namespace ClassicUO.Game
                             return;
                         }
                     }
+
+                    else if (UIManager.MouseOverControl != null && UIManager.MouseOverControl.Tooltip is Control c)
+                    {
+                        c.Draw(batcher, position.X, position.Y + 24);
+                        return;
+                    }
                 }
             }
 
@@ -602,10 +643,14 @@ namespace ClassicUO.Game
                 {
                     if (_tooltip.IsEmpty || _tooltip.Text != text)
                     {
-                        _tooltip.SetText(text, UIManager.MouseOverControl.TooltipMaxLength);
+                        _tooltip.SetText(text);
                     }
 
                     _tooltip.Draw(batcher, position.X, position.Y + 24);
+                }
+                else if (UIManager.MouseOverControl.Tooltip is Control c)
+                {
+                    c.Draw(batcher, position.X, position.Y + 24);
                 }
             }
             else if (!_tooltip.IsEmpty)
@@ -618,21 +663,22 @@ namespace ClassicUO.Game
         {
             int war = _world.InGame && _world.Player.InWarMode ? 1 : 0;
 
-            if (ImGuiManager.IsInitialized && ImGui.GetIO().WantCaptureMouse) return _cursorData[war, 9];
+            if (_cursorVisual != null)
+                return _cursorData[war, (ushort)_cursorVisual.Value];
 
             if (_world.TargetManager.IsTargeting)
             {
-                return _cursorData[war, 12];
+                return _cursorData[war, (int)GameCursorVisualType.Targeting];
             }
 
             if (UIManager.IsDragging || IsDraggingCursorForced)
             {
-                return _cursorData[war, 8];
+                return _cursorData[war, (int)GameCursorVisualType.Dragging];
             }
 
             if (IsLoading)
             {
-                return _cursorData[war, 13];
+                return _cursorData[war, (int)GameCursorVisualType.Loading];
             }
 
             if (
@@ -641,20 +687,13 @@ namespace ClassicUO.Game
                 && UIManager.MouseOverControl.IsEditable
             )
             {
-                return _cursorData[war, 14];
+                return _cursorData[war, (int)GameCursorVisualType.Editing];
             }
 
-            ushort result = _cursorData[war, 9];
+            ushort result = _cursorData[war, (int)GameCursorVisualType.FatPointingWest];
 
-            if (!UIManager.IsMouseOverWorld)
-            {
+            if (!UIManager.IsMouseOverWorld || ProfileManager.CurrentProfile == null)
                 return result;
-            }
-
-            if (ProfileManager.CurrentProfile == null)
-            {
-                return result;
-            }
 
             Camera camera = Client.Game.Scene.Camera;
 
@@ -765,20 +804,6 @@ namespace ClassicUO.Game
             int b = val < 0 ? 1 : 0;
 
             return a - b;
-        }
-
-        private readonly struct CursorInfo
-        {
-            public CursorInfo(IntPtr ptr, int w, int h)
-            {
-                CursorPtr = ptr;
-                Width = w;
-                Height = h;
-            }
-
-            public readonly int Width,
-                Height;
-            public readonly IntPtr CursorPtr;
         }
     }
 }

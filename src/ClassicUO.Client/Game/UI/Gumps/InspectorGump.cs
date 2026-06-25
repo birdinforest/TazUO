@@ -3,7 +3,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using ClassicUO.Assets;
+using ClassicUO.Configuration;
 using ClassicUO.Game.GameObjects;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Input;
@@ -96,7 +98,7 @@ namespace ClassicUO.Game.UI.Gumps
                     100,
                     25,
                     ButtonAction.Activate,
-                    ResGumps.Dump
+                    TazLang.Get("inspector_clipboard", "To clipboard")
                 )
                 {
                     ButtonParameter = 0
@@ -199,20 +201,18 @@ namespace ClassicUO.Game.UI.Gumps
 
                 if (dict != null)
                 {
-                    using (var writer = new LogFile(CUOEnviroment.ExecutablePath, "dump_gameobject.txt"))
-                    {
-                        writer.Write("###################################################");
-                        writer.Write($"CUO version: {CUOEnviroment.Version}");
-                        writer.Write($"OBJECT TYPE: {_obj.GetType()}");
+                    StringBuilder sb = new();
+                    sb.AppendLine("###################################################");
+                    sb.AppendLine($"CUO version: {CUOEnviroment.Version}");
+                    sb.AppendLine($"OBJECT TYPE: {_obj.GetType()}");
 
-                        foreach (KeyValuePair<string, string> item in dict.OrderBy(s => s.Key))
-                        {
-                            writer.Write($"{item.Key} = {item.Value}");
-                        }
+                    foreach (KeyValuePair<string, string> item in dict.OrderBy(s => s.Key)) sb.AppendLine($"{item.Key} = {item.Value}");
 
-                        writer.Write("###################################################");
-                        writer.Write("");
-                    }
+                    sb.AppendLine("###################################################");
+                    sb.AppendLine("");
+
+                    sb.ToString().CopyToClipboard();
+                    GameActions.Print(World, $"Copied to clipboard!", Constants.HUE_SUCCESS);
                 }
             }
         }
@@ -279,6 +279,7 @@ namespace ClassicUO.Game.UI.Gumps
                     dict["IsMulti"] = it.IsMulti.ToString();
                     dict["MultiGraphic"] = $"0x{it.MultiGraphic:X4}";
                     dict["IsImpassable"] = it.ItemData.IsImpassable.ToString();
+                    dict["CustomName"] = it.CustomName;
 
                     break;
 

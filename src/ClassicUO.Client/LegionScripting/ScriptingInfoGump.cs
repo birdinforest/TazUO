@@ -8,6 +8,7 @@ using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Controls;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Input;
+using ClassicUO.Utility;
 using Microsoft.Xna.Framework;
 
 namespace ClassicUO.LegionScripting
@@ -26,7 +27,7 @@ namespace ClassicUO.LegionScripting
 
         public static ScriptingInfoGump Instance { get; private set; }
 
-        private ScriptingInfoGump() : base(World.Instance, lastX, lastY, lastWidth, lastHeight, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BoderSize, true, MIN_WIDTH, MIN_HEIGHT)
+        private ScriptingInfoGump() : base(World.Instance, lastX, lastY, lastWidth, lastHeight, ModernUIConstants.ModernUIPanel, ModernUIConstants.ModernUIPanel_BorderSize, true, MIN_WIDTH, MIN_HEIGHT)
         {
             CanCloseWithRightClick = true;
             AcceptMouseInput = true;
@@ -64,6 +65,12 @@ namespace ClassicUO.LegionScripting
 
         public static void AddOrUpdateInfo(string key, object value)
         {
+            if (value == null || !value.ToString().NotNullNotEmpty())
+            {
+                infoEntries.Remove(key);
+                return;
+            }
+
             infoEntries[key] = value;
             Instance?.UpdateUI();
         }
@@ -181,7 +188,7 @@ namespace ClassicUO.LegionScripting
                     if (!string.IsNullOrEmpty(currentValue))
                     {
                         SetClipboardText(currentValue);
-                        GameActions.Print("Copied to clipboard!");
+                        GameActions.Print("Copied to clipboard!", Constants.HUE_SUCCESS);
                     }
                 }
                 catch (Exception)

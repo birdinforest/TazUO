@@ -3,6 +3,7 @@ using ClassicUO.Game.Data;
 using ClassicUO.Game.UI;
 using ClassicUO.Game.UI.Gumps;
 using ClassicUO.Game.UI.Gumps.SpellBar;
+using ClassicUO.Game.UI.MyraWindows;
 using ClassicUO.Utility;
 using SDL3;
 
@@ -44,7 +45,7 @@ public static class HideHudManager
             }
         }
 
-        foreach (Gump gump in UIManager.Gumps)
+        foreach (IGui gump in UIManager.Gumps)
         {
             if (gump == null)
                 continue;
@@ -89,7 +90,14 @@ public static class HideHudManager
                 gump.IsVisible = isVisible;
             else if (ByteFlagHelper.HasFlag(flags, (ulong)HideHudFlags.NameOverheadGump) && gump is NameOverHeadHandlerGump)
                 gump.IsVisible = isVisible;
-            // ScriptManagerGump removed - use ScriptManagerWindow instead
+            else if (ByteFlagHelper.HasFlag(flags, (ulong)HideHudFlags.HealthBarCollector) && gump is HealthbarCollectorGump)
+                gump.IsVisible = isVisible;
+            else if (ByteFlagHelper.HasFlag(flags, (ulong)HideHudFlags.AbilityButtons) && gump is UseAbilityButtonGump)
+                gump.IsVisible = isVisible;
+            else if (ByteFlagHelper.HasFlag(flags, (ulong)HideHudFlags.ScriptManagerGump) && gump is ScriptManagerWindow)
+                gump.IsVisible = isVisible;
+            else if (ByteFlagHelper.HasFlag(flags, (ulong)HideHudFlags.DebugGump) && gump is DebugGump)
+                gump.IsVisible = isVisible;
         }
     }
 }

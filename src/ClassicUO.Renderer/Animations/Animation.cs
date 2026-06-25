@@ -10,7 +10,7 @@ namespace ClassicUO.Renderer.Animations
         const int MAX_ANIMATIONS_DATA_INDEX_COUNT = 8192;
 
         private readonly TextureAtlas _atlas;
-        private readonly PixelPicker _picker = new PixelPicker();
+        private readonly PixelPicker _picker = new PixelPicker(false);
         private readonly AnimationsLoader _animationLoader;
         private IndexAnimation[] _dataIndex = new IndexAnimation[MAX_ANIMATIONS_DATA_INDEX_COUNT];
         private readonly object _dataIndexLock = new object();
@@ -247,7 +247,9 @@ namespace ClassicUO.Renderer.Animations
                     }
                 }
 
-                if (index.FileIndex == 0)
+                useUOP = (index.Flags & AnimationFlags.UseUopAnimation) != 0;
+
+                if (!useUOP && index.FileIndex == 0)
                 {
                     bool replaced = isCorpse ? _animationLoader.ReplaceCorpse(ref id, ref hue) : _animationLoader.ReplaceBody(ref id, ref hue);
                     if (replaced)
@@ -272,7 +274,6 @@ namespace ClassicUO.Renderer.Animations
                 }
             } while (index == null);
 
-            useUOP = (index.Flags & AnimationFlags.UseUopAnimation) != 0;
             index.Hue = hue;
 
             if (useUOP)

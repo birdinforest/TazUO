@@ -52,13 +52,13 @@ public class VBoxContainer : Control
         Reposition(); //Need to reposition, we don't know where the child was removed
     }
 
-    private void Reposition()
+    public void Reposition()
     {
         repositionRequested = false;
 
         pos.Reset();
 
-        foreach (Control child in Children)
+        foreach (IGui child in Children)
         {
             if (!child.IsVisible || child.IsDisposed)
                 continue;
@@ -72,7 +72,7 @@ public class VBoxContainer : Control
     private void UpdateSize()
     {
         int h = 0;
-        foreach (Control child in Children)
+        foreach (IGui child in Children)
         {
             if(!child.IsVisible || child.IsDisposed) continue;
 
@@ -83,7 +83,7 @@ public class VBoxContainer : Control
         Height = h;
     }
 
-    private void UpdateSize(Control c)
+    private void UpdateSize(IGui c)
     {
         if(!c.IsVisible || c.IsDisposed) return;
 

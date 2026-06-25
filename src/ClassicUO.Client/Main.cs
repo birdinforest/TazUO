@@ -14,6 +14,7 @@ using System.Globalization;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading;
 
 namespace ClassicUO
@@ -48,39 +49,38 @@ namespace ClassicUO
             //DllMap.Init();
 
             CUOEnviroment.GameThread = Thread.CurrentThread;
-            CUOEnviroment.GameThread.Name = "CUO_MAIN_THREAD";
+            CUOEnviroment.GameThread.Name = "TUO_MAIN_THREAD";
 
             AppDomain.CurrentDomain.UnhandledException += (s, e) =>
             {
-                var sb = new System.Text.StringBuilder();
-                sb.AppendLine("######################## [START LOG] ########################");
-
-#if DEV_BUILD
-                sb.AppendLine($"TazUO [DEV_BUILD] - {CUOEnviroment.Version} - {DateTime.Now}");
+                var sb = new StringBuilder();
+#if DEV_BUILD || DEBUG
+                sb.Append($"[TazUO - DEV (DEBUG: {CUOEnviroment.Debug}) - {CUOEnviroment.Version} - {DateTime.Now}]");
 #else
-                sb.AppendLine($"TazUO [STANDARD_BUILD] - {CUOEnviroment.Version} - {DateTime.Now}");
+                sb.Append($"[TazUO [STANDARD_BUILD] - {CUOEnviroment.Version} - {DateTime.Now}]");
 #endif
-                sb.AppendLine($"Framework: {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}");
+                sb.Append($" [{RuntimeInformation.FrameworkDescription}] [{RuntimeInformation.OSDescription} ({RuntimeInformation.OSArchitecture})]");
 
-                sb.AppendLine
-                    ($"OS: {System.Runtime.InteropServices.RuntimeInformation.OSDescription} ({System.Runtime.InteropServices.RuntimeInformation.OSArchitecture})");
+                sb.Append($" [{Thread.CurrentThread.Name}]");
 
-                sb.AppendLine($"Thread: {Thread.CurrentThread.Name}");
-                sb.AppendLine();
 
                 if (Settings.GlobalSettings != null)
-                {
-                    sb.AppendLine($"Shard: {Settings.GlobalSettings.IP}");
-                    sb.AppendLine($"ClientVersion: {Settings.GlobalSettings.ClientVersion}");
-                    sb.AppendLine();
-                }
+                    sb.Append($"[{Settings.GlobalSettings.ClientVersion}]");
+
+                sb.AppendLine();
 
                 sb.AppendFormat("Exception:\n{0}\n", e.ExceptionObject);
-                sb.AppendLine("######################## [END LOG] ########################");
-                sb.AppendLine();
                 sb.AppendLine();
 
-                HtmlCrashLogGen.Generate(sb.ToString());
+                string suggestedFix = GetSuggestedFix(e.ExceptionObject);
+
+                HtmlCrashLogGen.Generate(sb.ToString(), additional_notes: suggestedFix.NotNullNotEmpty() ? suggestedFix : string.Empty);
+
+                new CrashReporter().SendMessage(sb.ToString());
+
+
+                if (suggestedFix != null)
+                    sb.AppendLine(suggestedFix);
 
                 Log.Panic(e.ExceptionObject.ToString());
                 string path = Path.Combine(CUOEnviroment.ExecutablePath, "Logs");
@@ -90,7 +90,7 @@ namespace ClassicUO
 
                 using (var crashfile = new LogFile(path, "crash.txt"))
                 {
-                    crashfile.WriteAsync(sb.ToString()).RunSynchronously();
+                    crashfile.Write(sb.ToString());
                 }
             };
 
@@ -201,21 +201,21 @@ namespace ClassicUO
                 {
                     Client.ShowErrorMessage(ResGeneral.YourUOClientVersionIsInvalid);
                 }
-
-                //PlatformHelper.LaunchBrowser(ResGeneral.ClassicUOLink);
             }
             else
             {
                 switch (Settings.GlobalSettings.ForceDriver)
                 {
+                    default:
                     case 1: // OpenGL
                         Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "OpenGL");
+                        SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_DRIVER, "opengl");
 
                         break;
 
                     case 2: // Vulkan
                         Environment.SetEnvironmentVariable("FNA3D_FORCE_DRIVER", "Vulkan");
-
+                        SDL.SDL_SetHint(SDL.SDL_HINT_RENDER_DRIVER, "vulkan");
                         break;
                 }
 
@@ -223,6 +223,44 @@ namespace ClassicUO
             }
 
             Log.Trace("Closing...");
+        }
+
+        private static string GetSuggestedFix(object e)
+        {
+            try
+            {
+                if (e is ArgumentOutOfRangeException argumentOutOfRangeException &&
+                    argumentOutOfRangeException.StackTrace?.Contains("Microsoft.Xna.Framework.Graphics.GraphicsAdapter.get_DefaultAdapter()") == true)
+                {
+                    return "It appears TazUO was unable to find a suitable graphics adapter to use. " +
+                           "This can sometimes occur if your operating system shuts down your graphics adapter to preserve power.";
+                }
+
+                if (e is Exception shaderException && Client.IsShaderCompileFailure(shaderException))
+                {
+                    return Client.GraphicsShaderHelpMessage;
+                }
+
+                if (e is Microsoft.Xna.Framework.Graphics.NoSuitableGraphicsDeviceException graphicsException &&
+                    graphicsException.Message.Contains("Could not create swapchain!"))
+                {
+                    string dataPath = Path.Join(CUOEnviroment.ExecutablePath, "Data");
+                    string scriptsPath = Path.Join(CUOEnviroment.ExecutablePath, "LegionScripts");
+                    var sb = new StringBuilder();
+                    sb.AppendLine("Issue analysis indicates a potential conflict with your TazUO installation.");
+                    sb.AppendLine("The client does not support side-by-side installation of both legacy and modern builds.");
+                    sb.AppendLine($"Please backup your data ('{dataPath}') and script ('{scriptsPath}') folders and delete everything else.");
+                    sb.AppendLine("Re-download *only* your selected channel (Legacy or Modern) from the launcher.");
+                    sb.AppendLine("Copy your backed up Data and LegionScripts folders back to where they were.");
+                    return sb.ToString();
+                }
+            }
+            catch
+            {
+                Log.Error("Failed to obtain a suggested fix for error");
+            }
+
+            return null;
         }
 
         private static void ReadSettingsFromArgs(string[] args)
@@ -374,9 +412,9 @@ namespace ClassicUO
 
                     case "reconnect_time":
 
-                        if (!int.TryParse(value, out int reconnectTime) || reconnectTime < 1000)
+                        if (!int.TryParse(value, out int reconnectTime) || reconnectTime < 1)
                         {
-                            reconnectTime = 1000;
+                            reconnectTime = 1;
                         }
 
                         Settings.GlobalSettings.ReconnectTime = reconnectTime;
@@ -402,6 +440,11 @@ namespace ClassicUO
 
                     case "skiploginscreen":
                         CUOEnviroment.SkipLoginScreen = true;
+
+                        break;
+
+                    case "skipserverselect":
+                        CUOEnviroment.SkipServerSelect = true;
 
                         break;
 
@@ -505,7 +548,7 @@ namespace ClassicUO
                         break;
 
                     case "zlib":
-                        ZLib.SetForceManagedZlib(true);
+                        ZLib.SetCommandLineOverride();
 
                         break;
                 }
