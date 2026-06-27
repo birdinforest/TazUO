@@ -52,4 +52,3 @@ export DEBUG_GUMP_LOADING
 
 # Run with .NET runtime directly
 dotnet run -c Debug -- -settings "$SETTINGS_PATH" "$@"
-

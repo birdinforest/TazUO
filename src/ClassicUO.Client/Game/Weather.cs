@@ -1,5 +1,3 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
-
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Effects;
 using ClassicUO.Renderer;
@@ -10,7 +8,6 @@ using Microsoft.Xna.Framework.Graphics;
 using System;
 using MathHelper = Microsoft.Xna.Framework.MathHelper;
 using ClassicUO.Game.Map;
-using ClassicUO.IO.Audio;
 using ClassicUO.Configuration;
 
 namespace ClassicUO.Game
@@ -82,7 +79,6 @@ namespace ClassicUO.Game
         private readonly WeatherEffect[] _effects = new WeatherEffect[byte.MaxValue];
         private uint _timer, _windTimer, _lastTick;
         private readonly World _world;
-        private UOSound _currentRainSound;
 
         // White texture for RGBA drawing - lazy initialized with defensive error handling
         private static Texture2D _whiteTexture;
@@ -617,62 +613,31 @@ namespace ClassicUO.Game
                 return;
             }
 
-            StopRainSound();
-
-            UOSound rainSound = (UOSound)Client.Game.UO.Sounds.GetSound(soundId);
-            if (rainSound != null)
+            Profile currentProfile = ProfileManager.CurrentProfile;
+            if (currentProfile == null || !currentProfile.EnableSound || !currentProfile.EnableRainSound)
             {
-                Profile currentProfile = ProfileManager.CurrentProfile;
-                if (currentProfile == null || !currentProfile.EnableSound || !currentProfile.EnableRainSound)
-                {
-                    return;
-                }
+                return;
+            }
 
-                const float SOUND_DELTA = 250.0f;
-                float volume = currentProfile.SoundVolume / SOUND_DELTA;
+            const float SOUND_DELTA = 250.0f;
+            float volume = currentProfile.SoundVolume / SOUND_DELTA;
 
-                if (!Client.Game.IsActive && !currentProfile.ReproduceSoundsInBackground)
-                {
-                    volume = 0;
-                }
+            if (!Client.Game.IsActive && !currentProfile.ReproduceSoundsInBackground)
+            {
+                volume = 0;
+            }
 
-                // Rain sound is quieter than normal sound effects
-                volume *= RAIN_VOLUME_MULTIPLIER;
+            volume *= RAIN_VOLUME_MULTIPLIER;
 
-                if (volume > 0 && volume <= 1.0f)
-                {
-                    rainSound.IsLooping = true;
-
-                    if (rainSound.Play(Time.Ticks, volume, 0.0f))
-                    {
-                        // Submit additional buffers upfront for seamless playback (prevents gaps)
-                        // DynamicSoundEffectInstance needs at least 3 buffers for smooth playback
-                        rainSound.SubmitAdditionalBuffers(2);
-
-                        rainSound.X = _world.Player.X;
-                        rainSound.Y = _world.Player.Y;
-                        rainSound.CalculateByDistance = false;
-
-                        // Only set _currentRainSound after successfully starting playback
-                        _currentRainSound = rainSound;
-                    }
-                    else
-                    {
-                        // If sound failed to play, ensure reference is cleared
-                        rainSound.IsLooping = false;
-                    }
-                }
+            if (volume > 0 && volume <= 1.0f)
+            {
+                Client.Game.Audio.PlayAmbientSound(soundId, volume);
             }
         }
 
         private void StopRainSound()
         {
-            if (_currentRainSound != null)
-            {
-                _currentRainSound.IsLooping = false;
-                _currentRainSound.Stop();
-                _currentRainSound = null;
-            }
+            Client.Game.Audio.StopAmbientSound();
         }
 
         private void UpdateRainSound()
@@ -702,14 +667,14 @@ namespace ClassicUO.Game
             // Determine if rain is minor or heavy based on density
             // Minor: Count <= DENSITY_LARGE_DOTS (SmallDots + LargeDots)
             // Heavy: Count > DENSITY_LARGE_DOTS (ShortLines + LongBolts)
-            bool shouldPlayHeavyRain = Count > DENSITY_SHORT_LINES;
+            bool shouldPlayHeavyRain = Count > DENSITY_LARGE_DOTS;
 
             // Determine what sound should be playing
             int expectedSoundId = shouldPlayHeavyRain ? HEAVY_RAIN_SOUND_ID : MINOR_RAIN_SOUND_ID;
 
             // Only restart if we need to switch between minor/heavy, or if sound is not currently playing
             // When looping is enabled, sound will continue automatically, so we only need to check for type changes
-            bool needsRestart = _currentRainSound == null || _currentRainSound.Index != expectedSoundId;
+            bool needsRestart = Client.Game.Audio.CurrentAmbientIndex != expectedSoundId;
 
             if (needsRestart)
             {
@@ -731,7 +696,7 @@ namespace ClassicUO.Game
 
         private void UpdateRainSoundVolume()
         {
-            if (_currentRainSound == null || !_world.InGame || _world.Player == null)
+            if (!Client.Game.Audio.HasAmbientSound || !_world.InGame || _world.Player == null)
             {
                 return;
             }
@@ -739,7 +704,7 @@ namespace ClassicUO.Game
             Profile currentProfile = ProfileManager.CurrentProfile;
             if (currentProfile == null || !currentProfile.EnableSound || !currentProfile.EnableRainSound)
             {
-                _currentRainSound.Volume = 0;
+                Client.Game.Audio.SetAmbientVolume(0);
                 return;
             }
 
@@ -751,10 +716,9 @@ namespace ClassicUO.Game
                 volume = 0;
             }
 
-            // Rain sound is kept at 50% of system sound effect volume
             volume *= RAIN_VOLUME_MULTIPLIER;
 
-            _currentRainSound.Volume = Math.Clamp(volume, 0f, 1.0f);
+            Client.Game.Audio.SetAmbientVolume(Math.Clamp(volume, 0f, 1.0f));
         }
 
         private void PlaySound(int sound)
@@ -784,6 +748,10 @@ namespace ClassicUO.Game
         {
             if (IsWeatherDisabled)
             {
+                if (CurrentWeather.HasValue || CurrentCount > 0 || Client.Game.Audio.HasAmbientSound)
+                {
+                    Reset();
+                }
                 return;
             }
 

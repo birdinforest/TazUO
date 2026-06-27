@@ -1,4 +1,4 @@
-using ClassicUO.Assets;
+﻿using ClassicUO.Assets;
 using ClassicUO.Configuration;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
@@ -856,7 +856,7 @@ namespace ClassicUO.Game.UI.Gumps
             PositionHelper.PositionControl(c);
             PositionHelper.BlankLine();
 
-            scroll.Add(c = new CheckboxWithLabel(ResGumps.PlayRainSound, 0, profile.EnableRainSound,
+            scroll.Add(c = new CheckboxWithLabel(TazLang.Get("sound_play_rain", "Play rain sound"), 0, profile.EnableRainSound,
                 (b) => { profile.EnableRainSound = b; }));
             PositionHelper.PositionControl(c);
             PositionHelper.BlankLine();
@@ -3940,8 +3940,10 @@ namespace ClassicUO.Game.UI.Gumps
                     (b) => profile.DisableGrayEnemies = b), true, page);
 
             content.BlankLine();
-            content.AddToRight(new CheckboxWithLabel(lang.GetGeneral.DisableDismountWarmode, 0, profile.DisableDismountInWarMode, (b) => profile.DisableDismountInWarMode = b), true, page);
-            content.AddToRight(new CheckboxWithLabel(lang.GetGeneral.DisableRightMouseMoveWarmode, 0, profile.DisableRightMouseMoveInWarMode, (b) => profile.DisableRightMouseMoveInWarMode = b), true, page);
+            content.AddToRight(
+                new CheckboxWithLabel(lang.GetGeneral.DisableDismountWarmode, 0, profile.DisableDismountInWarMode,
+                    (b) => profile.DisableDismountInWarMode = b), true, page);
+
             #endregion
 
             #region Misc

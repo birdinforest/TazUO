@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework.Graphics;
 using System;
 using System.IO;
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using Xunit;
 
 namespace ClassicUO.UnitTests.Game
@@ -48,6 +49,18 @@ namespace ClassicUO.UnitTests.Game
             field?.SetValue(null, false);
         }
 
+        private static bool GetWarningLogged()
+        {
+            var field = typeof(Weather).GetField("_whiteTextureWarningLogged", BindingFlags.NonPublic | BindingFlags.Static);
+            return field != null && (bool)field.GetValue(null);
+        }
+
+        private static void InvokeLogWarning(string message)
+        {
+            var method = typeof(Weather).GetMethod("LogWarning", BindingFlags.NonPublic | BindingFlags.Static);
+            method.Invoke(null, new object[] { message });
+        }
+
         private static Vector3 InvokeColorToVector3(Color color)
         {
             var method = typeof(Weather).GetMethod("ColorToVector3", BindingFlags.NonPublic | BindingFlags.Static);
@@ -65,6 +78,15 @@ namespace ClassicUO.UnitTests.Game
             var method = typeof(Weather).GetMethod("SafeDrawLine", BindingFlags.NonPublic | BindingFlags.Static);
             return (bool)method.Invoke(null, new object[] { batcher, texture, start, end, color, width, depth });
         }
+
+        /// <summary>
+        /// Non-null stand-ins for null-guard tests. SafeDraw returns before using these instances.
+        /// </summary>
+        private static UltimaBatcher2D CreateStubBatcher() =>
+            (UltimaBatcher2D)RuntimeHelpers.GetUninitializedObject(typeof(UltimaBatcher2D));
+
+        private static Texture2D CreateStubTexture() =>
+            (Texture2D)RuntimeHelpers.GetUninitializedObject(typeof(Texture2D));
 
         #endregion
 
@@ -122,7 +144,7 @@ namespace ClassicUO.UnitTests.Game
         [Fact]
         public void SafeDraw_Should_ReturnFalse_When_TextureIsNull()
         {
-            UltimaBatcher2D batcher = null; 
+            UltimaBatcher2D batcher = CreateStubBatcher();
             Texture2D texture = null;
             Rectangle rect = new Rectangle(0, 0, 10, 10);
             Vector3 color = Vector3.One;
@@ -137,7 +159,7 @@ namespace ClassicUO.UnitTests.Game
         public void SafeDraw_Should_ReturnFalse_When_BatcherIsNull()
         {
             UltimaBatcher2D batcher = null;
-            Texture2D texture = null;
+            Texture2D texture = CreateStubTexture();
             Rectangle rect = new Rectangle(0, 0, 10, 10);
             Vector3 color = Vector3.One;
             float depth = 0.5f;
@@ -154,7 +176,7 @@ namespace ClassicUO.UnitTests.Game
         [Fact]
         public void SafeDrawLine_Should_ReturnFalse_When_TextureIsNull()
         {
-            UltimaBatcher2D batcher = null;
+            UltimaBatcher2D batcher = CreateStubBatcher();
             Texture2D texture = null;
             Vector2 start = new Vector2(0, 0);
             Vector2 end = new Vector2(10, 10);
@@ -171,7 +193,7 @@ namespace ClassicUO.UnitTests.Game
         public void SafeDrawLine_Should_ReturnFalse_When_BatcherIsNull()
         {
             UltimaBatcher2D batcher = null;
-            Texture2D texture = null;
+            Texture2D texture = CreateStubTexture();
             Vector2 start = new Vector2(0, 0);
             Vector2 end = new Vector2(10, 10);
             Vector3 color = Vector3.One;
@@ -261,11 +283,33 @@ namespace ClassicUO.UnitTests.Game
         public void LogWarning_Should_OnlyLogOnce()
         {
             ResetWarningState();
+            GetWarningLogged().Should().BeFalse("warning state should be reset initially");
 
-            var warningLoggedField = typeof(Weather).GetField("_whiteTextureWarningLogged", BindingFlags.NonPublic | BindingFlags.Static);
-            bool initialState = (bool)warningLoggedField.GetValue(null);
+            var originalOut = Console.Out;
+            try
+            {
+                using var captured = new StringWriter();
+                Console.SetOut(captured);
 
-            initialState.Should().BeFalse("Warning state should be reset initially");
+                InvokeLogWarning("test warning");
+                InvokeLogWarning("second warning should not appear");
+
+                string output = captured.ToString();
+                output.Should().Contain("test warning");
+                output.Should().NotContain("second warning should not appear");
+
+                int firstWarningIndex = output.IndexOf("[Weather] WARNING:", StringComparison.Ordinal);
+                firstWarningIndex.Should().BeGreaterOrEqualTo(0, "first LogWarning call should write to console");
+                output.IndexOf("[Weather] WARNING:", firstWarningIndex + 1, StringComparison.Ordinal)
+                    .Should().Be(-1, "second LogWarning call should not write again");
+
+                GetWarningLogged().Should().BeTrue("LogWarning should set the logged flag on first call");
+            }
+            finally
+            {
+                Console.SetOut(originalOut);
+                ResetWarningState();
+            }
         }
 
         #endregion

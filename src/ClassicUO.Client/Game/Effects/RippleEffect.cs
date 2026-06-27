@@ -1,5 +1,3 @@
-// SPDX-License-Identifier: BSD-2-Clause
-
 using ClassicUO.Renderer;
 using Microsoft.Xna.Framework;
 using System;
@@ -87,8 +85,8 @@ namespace ClassicUO.Game.Effects
                 ripple.Y = ripple.WorldY - viewportOffsetY;
 
                 // Check visibility (off-screen ripples can be skipped for performance)
-                if (ripple.X < -visibleRangeX || ripple.X > visibleRangeX ||
-                    ripple.Y < -visibleRangeY || ripple.Y > visibleRangeY)
+                if (ripple.X < -visibleRangeX || ripple.X > visibleRangeX * 2 ||
+                    ripple.Y < -visibleRangeY || ripple.Y > visibleRangeY * 2)
                 {
                     ripple.Active = false; // Deactivate off-screen ripples
                     continue;
