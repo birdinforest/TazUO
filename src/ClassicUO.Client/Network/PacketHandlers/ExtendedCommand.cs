@@ -729,6 +729,22 @@ internal static class ExtendedCommand
                 }
                 break;
 
+            case 0x0100: // Dynamic Dungeon — LandTileUpdate
+                HandleLandTileUpdate(world, ref p);
+                break;
+
+            case 0x0101: // Dynamic Dungeon — BeginLandOverrideSession
+                HandleBeginLandOverrideSession(world, ref p);
+                break;
+
+            case 0x0102: // Dynamic Dungeon — ClearLandOverrideSession
+                HandleClearLandOverrideSession(world, ref p);
+                break;
+
+            case 0x0103: // Dynamic Dungeon — ClearAllLandOverrideSessions
+                HandleClearAllLandOverrideSessions(world, ref p);
+                break;
+
             case 0xBEEF: // ClassicUO commands
 
                 type = p.ReadUInt16BE();
@@ -768,5 +784,110 @@ internal static class ExtendedCommand
             delay,
             repeatCount
         );
+    }
+
+    private static void HandleBeginLandOverrideSession(World world, ref StackDataReader p)
+    {
+        uint epoch = p.ReadUInt32BE();
+        int sessionId = p.ReadInt32BE();
+        int mapId = p.ReadUInt8();
+        int originX = p.ReadInt16BE();
+        int originY = p.ReadInt16BE();
+        int width = p.ReadUInt16BE();
+        int height = p.ReadUInt16BE();
+
+        bool accepted = DynamicDungeonLandOverrideManager.Instance.BeginSession(epoch, sessionId, mapId, originX, originY, width, height);
+        Log.Debug($"[DynamicDungeon] BeginLandOverrideSession: epoch={epoch}, session={sessionId}, map={mapId}, origin=({originX},{originY}), size={width}x{height}, accepted={accepted}");
+    }
+
+    private static void HandleClearLandOverrideSession(World world, ref StackDataReader p)
+    {
+        uint epoch = p.ReadUInt32BE();
+        int sessionId = p.ReadInt32BE();
+        bool cleared = DynamicDungeonLandOverrideManager.Instance.ClearSession(epoch, sessionId);
+        Log.Debug($"[DynamicDungeon] ClearLandOverrideSession: epoch={epoch}, session={sessionId}, cleared={cleared}");
+    }
+
+    private static void HandleClearAllLandOverrideSessions(World world, ref StackDataReader p)
+    {
+        uint epoch = p.ReadUInt32BE();
+        DynamicDungeonLandOverrideManager.Instance.ClearAll(epoch);
+        Log.Debug($"[DynamicDungeon] ClearAllLandOverrideSessions: epoch={epoch}");
+    }
+
+    private static void HandleLandTileUpdate(World world, ref StackDataReader p)
+    {
+        if (world?.Map == null)
+        {
+            Log.Warn("[HandleLandTileUpdate] world or Map is null — ignoring packet");
+            return;
+        }
+
+        DynamicDungeonLandOverrideManager manager = DynamicDungeonLandOverrideManager.Instance;
+        uint epoch = p.ReadUInt32BE();
+        int sessionId = p.ReadInt32BE();
+        ushort count = p.ReadUInt16BE();
+        Log.Debug($"[HandleLandTileUpdate] Received: epoch={epoch}, session={sessionId}, count={count}");
+
+        int updated = 0;
+        int accepted = 0;
+        int skippedOutOfBounds = 0;
+        int skippedWrongMap = 0;
+        int skippedNoChunk = 0;
+        int skippedNoLand = 0;
+
+        for (int i = 0; i < count; i++)
+        {
+            int wx = p.ReadInt16BE();
+            int wy = p.ReadInt16BE();
+            ushort tileId = p.ReadUInt16BE();
+            sbyte z = (sbyte)p.ReadUInt8();
+
+            if (!manager.StoreOverride(epoch, sessionId, wx, wy, tileId, z))
+            {
+                skippedOutOfBounds++;
+                continue;
+            }
+
+            accepted++;
+            manager.MarkDirtyChunkForWorldTile(wx, wy);
+
+            if (!manager.IsSessionMap(world.Map.Index))
+            {
+                skippedWrongMap++;
+                continue;
+            }
+
+            GameObject head = world.Map.GetTile(wx, wy, false);
+
+            if (head == null)
+            {
+                skippedNoChunk++;
+                continue;
+            }
+
+            bool found = false;
+            GameObject obj = head;
+            while (obj != null)
+            {
+                if (obj is Land land)
+                {
+                    land.Graphic = tileId;
+                    land.Z = z;
+                    land.ApplyStretch(world.Map, land.X, land.Y, z);
+                    land.UpdateScreenPosition();
+                    updated++;
+                    found = true;
+                    break;
+                }
+
+                obj = obj.TNext;
+            }
+
+            if (!found)
+                skippedNoLand++;
+        }
+
+        Log.Debug($"[HandleLandTileUpdate] Done: accepted={accepted}, updated={updated}, skipped(out of bounds/no active session)={skippedOutOfBounds}, skipped(wrong map)={skippedWrongMap}, skipped(no chunk)={skippedNoChunk}, skipped(no land)={skippedNoLand}");
     }
 }

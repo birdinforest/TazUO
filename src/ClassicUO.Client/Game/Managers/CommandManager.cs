@@ -138,6 +138,46 @@ namespace ClassicUO.Game.Managers
             Register("version", s => { UIManager.Add(new VersionHistory(_world)); });
             Register("rain", s => { _world.Weather.Generate(WeatherType.WT_RAIN, 30, 75); });
 
+            Register("puddle", s =>
+            {
+                if (_world.Player == null)
+                {
+                    return;
+                }
+
+                if (s.Length > 1 && s[1] == "clear")
+                {
+                    PuddleManager.Clear();
+                    return;
+                }
+
+                if (s.Length > 1 && (s[1] == "gump" || s[1] == "ui"))
+                {
+                    UIManager.Add(new PuddleSetupGump(_world));
+                    return;
+                }
+
+                if (!PuddleSpawnOptions.TryParseCommand(s, _world.Player.X, _world.Player.Y, _world.Player.Z, out PuddleSpawnOptions options))
+                {
+                    return;
+                }
+
+                if (PuddleSpawn.TryCreate(_world, options, out string message) != null)
+                {
+                    GameActions.Print(_world, message + " Use -puddle clear to remove.", 68);
+                }
+            });
+
+            Register("puddlegump", s =>
+            {
+                if (_world.Player == null)
+                {
+                    return;
+                }
+
+                UIManager.Add(new PuddleSetupGump(_world));
+            });
+
             Register("marktile", s =>
             {
                 if (s.Length > 1 && s[1] == "-r")

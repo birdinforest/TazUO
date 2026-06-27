@@ -1,4 +1,4 @@
-﻿// SPDX-License-Identifier: BSD-2-Clause
+// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using System.Collections.Generic;
@@ -22,6 +22,7 @@ namespace ClassicUO.Game
 {
     public sealed class World
     {
+        private const int DynamicDungeonChunkRefreshBudgetPerFrame = 16;
         public static World Instance { get; private set; }
         public EffectManager EffectManager => _effectManager;
         private readonly EffectManager _effectManager;
@@ -379,6 +380,8 @@ namespace ClassicUO.Game
             // Process asynchronously loaded map chunks once per frame
             // instead of on every GetChunk call for better performance
             Map?.ProcessLoadedChunks();
+            if (Map != null)
+                DynamicDungeonLandOverrideManager.Instance.RefreshDirtyLoadedChunks(Map, DynamicDungeonChunkRefreshBudgetPerFrame);
 
             if (Player != null)
             {

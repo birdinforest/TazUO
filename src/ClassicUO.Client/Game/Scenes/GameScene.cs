@@ -85,6 +85,7 @@ namespace ClassicUO.Game.Scenes
         private readonly AutoUnequipActionManager _autoUnequipActionManager;
         private bool _useObjectHandles;
         private RenderTarget2D _worldRenderTarget, _lightRenderTarget;
+        private PuddleRenderer _puddleRenderer;
         private AnimatedStaticsManager _animatedStaticsManager;
 
         private readonly World _world;
@@ -442,11 +443,14 @@ namespace ClassicUO.Game.Scenes
             _ = AsyncNetClient.Socket.Disconnect();
             _lightRenderTarget?.Dispose();
             _worldRenderTarget?.Dispose();
+            _puddleRenderer?.Dispose();
+            _puddleRenderer = null;
             _xbr?.Dispose();
             _xbr = null;
 
             _world.CommandManager.UnRegisterAll();
             _world.Weather.Reset();
+            PuddleManager.Clear();
             SkillProgressBar.QueManager.Reset();
             UIManager.Clear();
             _world.Clear();
@@ -666,6 +670,7 @@ namespace ClassicUO.Game.Scenes
 
         private void FillGameObjectList()
         {
+            _renderListLand.Clear();
             _renderListStatics.Clear();
             _renderListAnimations.Clear();
             _renderListEffects.Clear();
@@ -1225,6 +1230,7 @@ namespace ClassicUO.Game.Scenes
             Profiler.ExitContext("EnsureWorldMatrix");
 
             Profiler.EnterContext("RenderWorld");
+            EnsurePuddleRenderer(gd);
             DrawWorld(batcher, ref _worldRtMatrix);
             Profiler.ExitContext("RenderWorld");
 
@@ -1269,13 +1275,125 @@ namespace ClassicUO.Game.Scenes
             batcher.GraphicsDevice.SetRenderTarget(_worldRenderTarget);
             batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
 
-            batcher.SetSampler(SamplerState.PointClamp);
+            float brightlight = ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f;
+            bool hasReflection = _puddleRenderer != null && PuddleManager.GetRegions().Count > 0;
 
+            // === Phase 1: object-space reflection capture ===
+            // Each sprite is drawn at its normal screen position but with destinationH negated
+            // (via batcher.ReflectionMode), so the sprite extends downward from the feet anchor
+            // instead of upward — mirroring each object around its own feet, not a shared pivot.
+            if (hasReflection)
+            {
+                _puddleRenderer!.BeginReflectionTarget(
+                    batcher.GraphicsDevice,
+                    _worldRenderTarget.Width,
+                    _worldRenderTarget.Height
+                );
+
+                batcher.ReflectionMode = true;
+                batcher.SetSampler(SamplerState.PointClamp);
+                batcher.Begin(null, matrix);
+                batcher.SetBrightlight(brightlight);
+                batcher.SetStencil(DepthStencilState.Default);
+                RenderedObjectsCount = 0;
+                DrawWorldObjectLayers(batcher);
+                batcher.SetSampler(null);
+                batcher.SetStencil(null);
+                batcher.End();
+                batcher.ReflectionMode = false;
+                batcher.ReflectionPivotOffset = 0f;
+
+                _puddleRenderer!.EndReflectionTarget(batcher.GraphicsDevice);
+                batcher.GraphicsDevice.SetRenderTarget(_worldRenderTarget);
+            }
+
+            // === Phase 2: final frame — land → puddle → objects ===
+            batcher.GraphicsDevice.Clear(ClearOptions.Target, Color.Black, 1f, 0);
+
+            // === Pass 1: Ground tiles only ===
+            batcher.SetSampler(SamplerState.PointClamp);
             batcher.Begin(null, matrix);
-            batcher.SetBrightlight(ProfileManager.CurrentProfile.TerrainShadowsLevel * 0.1f);
+            batcher.SetBrightlight(brightlight);
             batcher.SetStencil(DepthStencilState.Default);
 
             RenderedObjectsCount = 0;
+            Profiler.EnterContext("Land");
+            RenderedObjectsCount += DrawRenderList(
+                batcher,
+                _renderListLand
+            );
+            Profiler.ExitContext("Land");
+
+            batcher.SetStencil(null);
+            batcher.SetSampler(null);
+            batcher.End();
+
+            // === Puddle pass: above ground tiles, below all objects ===
+            _puddleRenderer?.Draw(
+                batcher.GraphicsDevice,
+                PuddleManager.GetRegions(),
+                ref matrix,
+                _worldRenderTarget.Width,
+                _worldRenderTarget.Height,
+                (float)(Time.Ticks / 1000.0),
+                _offset.X,
+                _offset.Y,
+                _world
+            );
+
+            // === Pass 2: Statics, animations, effects, weather — all rendered on top of puddles ===
+            batcher.SetSampler(SamplerState.PointClamp);
+            batcher.Begin(null, matrix);
+            batcher.SetBrightlight(brightlight);
+            batcher.SetStencil(DepthStencilState.Default);
+
+            DrawWorldObjectLayers(batcher);
+
+            batcher.SetSampler(null);
+            batcher.SetStencil(null);
+            batcher.End();
+
+            // Draw overheads and selection into the render target (for consistent scaling)
+            // Use the same matrix transform as game objects to ensure coordinate system consistency
+            batcher.Begin(null, matrix);
+
+            DrawOverheads(batcher);
+            DrawSelection(batcher);
+
+            // Render projectile debug markers (client-side only, no network packets)
+            // Use the same offset as UpdateRealScreenPosition for consistency
+            ProjectileDebugVisualizer.Render(batcher, _offset);
+
+            batcher.End();
+
+            // Restore previous render target
+            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
+            {
+                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
+            }
+            else
+            {
+                batcher.GraphicsDevice.SetRenderTarget(null);
+            }
+
+            //batcher.Begin();
+            //hueVec.X = 0;
+            //hueVec.Y = 1;
+            //hueVec.Z = 1;
+            //string s = $"Flushes: {batcher.FlushesDone}\nSwitches: {batcher.TextureSwitches}\nArt texture count: {TextureAtlas.Shared.TexturesCount}\nMaxZ: {_maxZ}\nMaxGround: {_maxGroundZ}";
+            //batcher.DrawString(Fonts.Bold, s, 200, 200, ref hueVec);
+            //hueVec = Vector3.Zero;
+            //batcher.DrawString(Fonts.Bold, s, 200 + 1, 200 - 1, ref hueVec);
+            //batcher.End();
+        }
+
+        /// <summary>
+        /// Draws statics, animations, effects, transparency, multi placement, and weather.
+        /// Caller must have batcher.Begin active with matrix/brightlight/stencil configured.
+        /// </summary>
+        private void DrawWorldObjectLayers(UltimaBatcher2D batcher)
+        {
+            Profiler.EnterContext("DrawObjects");
             Profiler.EnterContext("Statics");
             RenderedObjectsCount += DrawRenderList(batcher, _renderListStatics);
             Profiler.ExitContext("Statics");
@@ -1308,33 +1426,12 @@ namespace ClassicUO.Game.Scenes
                 );
             }
 
-            batcher.SetSampler(null);
-            batcher.SetStencil(null);
-
             // draw weather (DisableWeather also checked inside Weather.Draw)
             if (ProfileManager.CurrentProfile?.DisableWeather != true)
             {
                 Profiler.EnterContext("Weather");
                 _world.Weather.Draw(batcher, 0, 0, MAX_LAYER_DEPTH - 1);
                 Profiler.ExitContext("Weather");
-            }
-
-            //GameController.DrawFlushCounts(batcher, 200, 200);
-
-            // Render projectile debug markers (client-side only, no network packets)
-            // Use the same offset as UpdateRealScreenPosition for consistency
-            ProjectileDebugVisualizer.Render(batcher, _offset);
-
-            batcher.End();
-
-            // Restore previous render target
-            if (previousRenderTargets != null && previousRenderTargets.Length > 0)
-            {
-                batcher.GraphicsDevice.SetRenderTargets(previousRenderTargets);
-            }
-            else
-            {
-                batcher.GraphicsDevice.SetRenderTarget(null);
             }
         }
 
@@ -1492,6 +1589,14 @@ namespace ClassicUO.Game.Scenes
                 selectionRect.Height,
                 selectionHue
             );
+        }
+
+        private void EnsurePuddleRenderer(GraphicsDevice gd)
+        {
+            if (_puddleRenderer == null)
+            {
+                _puddleRenderer = new PuddleRenderer(gd);
+            }
         }
 
         private void EnsureRenderTargets(GraphicsDevice gd)

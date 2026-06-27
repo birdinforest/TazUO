@@ -51,6 +51,7 @@ namespace ClassicUO.Game.Scenes
         private Vector2 _currentSmoothedOffset = Vector2.Zero;
 
 
+        private readonly List<GameObject> _renderListLand = new List<GameObject>();
         private readonly List<GameObject> _renderListStatics = new List<GameObject>();
         private readonly List<GameObject> _renderListTransparentObjects = new List<GameObject>();
         private readonly List<GameObject> _renderListAnimations = new List<GameObject>();
@@ -710,7 +711,7 @@ namespace ClassicUO.Game.Scenes
 
                         PushToRenderList(
                             obj,
-                            _renderListStatics,
+                            _renderListLand,
                             true
                         );
                         break;

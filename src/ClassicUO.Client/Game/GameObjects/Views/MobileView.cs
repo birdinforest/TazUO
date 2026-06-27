@@ -48,6 +48,8 @@ namespace ClassicUO.Game.GameObjects
             FrameInfo.Width = 0;
             FrameInfo.Height = 0;
 
+            batcher.ReflectionFeetOverride = null;
+
             posY -= 3;
             int drawX = posX + (int)Offset.X + 22;
             int drawY = posY + (int)(Offset.Y - Offset.Z) + 22;
@@ -712,6 +714,7 @@ namespace ClassicUO.Game.GameObjects
             }
 
             ref SpriteInfo spriteInfo = ref frames[frameIndex % frames.Length];
+            float tileScreenY = y;
 
             if (spriteInfo.Texture == null)
             {
@@ -782,6 +785,13 @@ namespace ClassicUO.Game.GameObjects
                 {
                     var pos = new Vector2(x, y);
                     Rectangle rect = spriteInfo.UV;
+                    float mobileFeetY = tileScreenY - spriteInfo.Center.Y * owner.Scale;
+                    float feetScreenY = batcher.ReflectionFeetOverride ?? mobileFeetY;
+
+                    if (isMount && batcher.ReflectionMode)
+                    {
+                        batcher.ReflectionFeetOverride = mobileFeetY;
+                    }
 
                     if (charIsSitting)
                     {
@@ -801,6 +811,9 @@ namespace ClassicUO.Game.GameObjects
                     {
                         if (isMount && drawAsSingleLayer)
                         {
+                            float sliceH = rect.Height * owner.Scale;
+                            SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, sliceH);
+
                             batcher.Draw(
                                 spriteInfo.Texture,
                                 pos,

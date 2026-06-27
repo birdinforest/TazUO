@@ -31,6 +31,46 @@ namespace ClassicUO.Game.GameObjects
         private const float DEPTH_WET_BASE_OFFSET = 0.49f;
         private const float DEPTH_SHADOW_OFFSET = 0.25f;
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        protected static void SetReflectionPivotSlice(
+            UltimaBatcher2D batcher,
+            float feetScreenY,
+            float drawY,
+            float drawHeight
+        )
+        {
+            if (batcher.ReflectionMode)
+            {
+                // Mirror around feetScreenY (tile ground contact / opaque art base).
+                batcher.ReflectionPivotOffset = (drawY + drawHeight) - feetScreenY;
+            }
+        }
+
+        /// <summary>
+        /// Screen Y of the ground-contact line for static art reflection.
+        /// UO statics align art row (H-44) to the tile anchor; mirror at that line.
+        /// Real art bounds may only raise the axis when opaque pixels end above the anchor.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static float GetStaticReflectionFeetY(
+            float tileScreenY,
+            float posY,
+            ushort graphic
+        )
+        {
+            Rectangle bounds = Client.Game.UO.Arts.GetRealArtBounds(graphic);
+
+            if (bounds.Width > 0 && bounds.Height > 0)
+            {
+                float opaqueBottom = posY + bounds.Y + bounds.Height;
+                // Opaque pixels below the tile anchor are usually padding/shadow — do not push
+                // the mirror axis down (that creates a gap between trunk/base and reflection).
+                return Math.Min(tileScreenY, opaqueBottom);
+            }
+
+            return tileScreenY;
+        }
+
         // Water animation caching for performance
         private static float _cachedWaterSin;
         private static float _cachedWaterCos;
@@ -152,15 +192,19 @@ namespace ClassicUO.Game.GameObjects
                 index.Width = (short)((artInfo.UV.Width >> 1) - TILE_CENTER_OFFSET);
                 index.Height = (short)(artInfo.UV.Height - TILE_HEIGHT_OFFSET);
 
+                float tileScreenY = y;
                 x -= index.Width;
                 y -= index.Height;
 
                 var pos = new Vector2(x, y);
+                float drawHeight = artInfo.UV.Height;
+                float feetScreenY = GetStaticReflectionFeetY(tileScreenY, pos.Y, graphic);
                 float renderDepth = depth + DEPTH_RENDER_OFFSET;
 
                 if (isWet)
                 {
                     // Draw base layer at slightly lower depth to prevent z-fighting
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
@@ -175,6 +219,7 @@ namespace ClassicUO.Game.GameObjects
 
                     // Draw animated water layer on top
                     Vector2 scale = GetWaterAnimationScale();
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight * scale.Y);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
@@ -189,6 +234,7 @@ namespace ClassicUO.Game.GameObjects
                 }
                 else
                 {
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
@@ -315,10 +361,13 @@ namespace ClassicUO.Game.GameObjects
                 index.Width = (short)((artInfo.UV.Width >> 1) - TILE_CENTER_OFFSET);
                 index.Height = (short)(artInfo.UV.Height - TILE_HEIGHT_OFFSET);
 
+                float tileScreenY = y;
                 x -= index.Width;
                 y -= index.Height;
 
                 var pos = new Vector2(x, y);
+                float drawHeight = artInfo.UV.Height;
+                float feetScreenY = GetStaticReflectionFeetY(tileScreenY, pos.Y, graphic);
                 float renderDepth = depth + DEPTH_RENDER_OFFSET;
 
                 if (shadow)
@@ -329,6 +378,7 @@ namespace ClassicUO.Game.GameObjects
                 if (isWet)
                 {
                     // Draw base layer at slightly lower depth to prevent z-fighting
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
@@ -343,6 +393,7 @@ namespace ClassicUO.Game.GameObjects
 
                     // Draw animated water layer on top
                     Vector2 scale = GetWaterAnimationScale();
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight * scale.Y);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
@@ -357,6 +408,7 @@ namespace ClassicUO.Game.GameObjects
                 }
                 else
                 {
+                    SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, drawHeight);
                     batcher.Draw(
                         artInfo.Texture,
                         pos,
