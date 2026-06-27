@@ -1113,11 +1113,10 @@ namespace ClassicUO.Game
                                             CreateSplash(ref effect, effect.WorldX, effect.WorldY);
                                         }
 
-                                        // Trigger ripple effect if rain hits water tile (only once per particle)
+                                        // Trigger ripple when rain hits water or a ground puddle (once per particle)
                                         if (!effect.RippleCreated)
                                         {
-                                            var isWaterTile = IsWaterTileAtPosition(effect.WorldX, effect.WorldY);
-                                            if (isWaterTile)
+                                            if (ShouldCreateRippleAtPosition(effect.WorldX, effect.WorldY))
                                             {
                                                 _world.RippleEffect.CreateRipple(effect.WorldX, effect.WorldY);
                                                 effect.RippleCreated = true;
@@ -1716,6 +1715,16 @@ namespace ClassicUO.Game
         {
             (int targetTileX, int targetTileY) = CoordinateHelper.IsometricToTile(worldX, worldY);
             return TileDetectionHelper.IsWaterTile(_world.Map, targetTileX, targetTileY);
+        }
+
+        private bool ShouldCreateRippleAtPosition(float worldX, float worldY)
+        {
+            if (IsWaterTileAtPosition(worldX, worldY))
+            {
+                return true;
+            }
+
+            return PuddleManager.ContainsWorldPoint(worldX, worldY, _world);
         }
 
         /// <summary>

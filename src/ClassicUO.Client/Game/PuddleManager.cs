@@ -46,5 +46,26 @@ namespace ClassicUO.Game
         }
 
         public static IReadOnlyList<PuddleRegion> GetRegions() => _regions.ToArray();
+
+        /// <summary>
+        /// True when any registered puddle covers the given absolute isometric point.
+        /// </summary>
+        public static bool ContainsWorldPoint(float worldX, float worldY, World world)
+        {
+            if (world == null || _regions.Count == 0)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < _regions.Count; i++)
+            {
+                if (PuddleRenderer.ContainsWorldPoint(_regions[i], worldX, worldY, world))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 }

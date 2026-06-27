@@ -400,6 +400,69 @@ namespace ClassicUO.Game
             region.MaskDirty = false;
         }
 
+        /// <summary>
+        /// Returns the organic outer-shape mask alpha (0–1) at fractional tile coordinates.
+        /// Matches <see cref="BuildOuterShapeMask"/> for rain ripple hit testing.
+        /// </summary>
+        internal static float SampleOuterShapeAlpha(PuddleRegion region, float worldTileX, float worldTileY)
+        {
+            float dTileX = worldTileX - region.TileX;
+            float dTileY = worldTileY - region.TileY;
+            float isoDist = MathF.Sqrt(dTileX * dTileX + (dTileY * 0.5f) * (dTileY * 0.5f));
+            float tileRadius = region.Radius / ISO_TILE_WIDTH * ComputeShapeEdgeScale();
+
+            if (tileRadius <= 0.0001f)
+            {
+                return 0f;
+            }
+
+            float dist = isoDist / tileRadius;
+            float angle = MathF.Atan2(dTileY, dTileX);
+            float wobble = ComputeOuterShapeWobble(angle, region.TileX, region.TileY, worldTileX, worldTileY);
+            float edgeProximity = SmoothStep(0.72f, 1.08f, dist);
+
+            float shapeTileRadius = ComputeShapeTileRadius(region.Radius);
+            ComputeMaskTileMargins(shapeTileRadius, out int marginX, out int marginY);
+            int minTX = region.TileX - marginX;
+            int minTY = region.TileY - marginY;
+            int px = (int)((worldTileX - minTX) * MASK_SUBPIXELS_PER_TILE);
+            int py = (int)((worldTileY - minTY) * MASK_SUBPIXELS_PER_TILE);
+            float micro =
+                (MaskHash(px * 5 + region.TileX, py * 5 + region.TileY) - 0.5f)
+                * OUTER_SHAPE_MICRO
+                * edgeProximity;
+            float boundary = 1.0f + wobble + micro;
+
+            return 1.0f - SmoothStep(
+                boundary - OUTER_SHAPE_FADE_IN,
+                boundary + OUTER_SHAPE_FADE_OUT,
+                dist
+            );
+        }
+
+        /// <summary>
+        /// True when absolute isometric coordinates lie on visible puddle water (shape + optional height clip).
+        /// </summary>
+        internal static bool ContainsWorldPoint(PuddleRegion region, float worldX, float worldY, World world)
+        {
+            float worldTileX = (worldX + worldY) / 44f;
+            float worldTileY = (worldY - worldX) / 44f;
+
+            if (SampleOuterShapeAlpha(region, worldTileX, worldTileY) <= 0.02f)
+            {
+                return false;
+            }
+
+            if (region.UseHeightMask && world.Map != null)
+            {
+                int tx = (int)Math.Round(worldTileX, MidpointRounding.AwayFromZero);
+                int ty = (int)Math.Round(worldTileY, MidpointRounding.AwayFromZero);
+                return world.Map.GetTileZ(tx, ty) < region.MaxWaterZ;
+            }
+
+            return true;
+        }
+
         private static float ComputeShapeEdgeScale()
         {
             return OUTER_SHAPE_QUAD_PAD
