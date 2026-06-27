@@ -18,7 +18,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int FIELD_W = 132;
         private const int ROW_H = 28;
         private const int GUMP_W = 360;
-        private const int GUMP_H = 596;
+        private const int GUMP_H = 876;
 
         private enum ButtonId
         {
@@ -43,6 +43,15 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly StbTextBox _surfaceShimmer;
         private readonly StbTextBox _edgeRipple;
         private readonly StbTextBox _maxWaterZ;
+        private readonly Checkbox _dynamicExpansion;
+        private readonly StbTextBox _dynamicMinWaterZ;
+        private readonly StbTextBox _dynamicMaxWaterZ;
+        private readonly StbTextBox _dynamicWaterZStep;
+        private readonly StbTextBox _dynamicWaterZInterval;
+        private readonly StbTextBox _dynamicMinRadius;
+        private readonly StbTextBox _dynamicMaxRadius;
+        private readonly StbTextBox _dynamicRadiusStep;
+        private readonly StbTextBox _dynamicRadiusInterval;
 
         public PuddleSetupGump(World world)
             : base(world, 0, 0)
@@ -53,7 +62,7 @@ namespace ClassicUO.Game.UI.Gumps
             AcceptMouseInput = true;
 
             X = 120;
-            Y = 60;
+            Y = 40;
             Width = GUMP_W;
             Height = GUMP_H;
 
@@ -66,6 +75,10 @@ namespace ClassicUO.Game.UI.Gumps
             PuddleSpawnOptions defaults = world.Player != null
                 ? PuddleSpawnOptions.FromPlayer(world.Player.X, world.Player.Y, world.Player.Z)
                 : new PuddleSpawnOptions();
+
+            sbyte groundZ = world.Player != null && world.Map != null
+                ? world.Map.GetTileZ(world.Player.X, world.Player.Y)
+                : (sbyte)defaults.TileZ;
 
             int y = 60;
             _tileX = AddRow(ref y, "Tile X", defaults.TileX.ToString(CultureInfo.InvariantCulture));
@@ -82,6 +95,27 @@ namespace ClassicUO.Game.UI.Gumps
             _surfaceShimmer = AddRow(ref y, "Surface shimmer", defaults.SurfaceShimmerStrength.ToString("0.000", CultureInfo.InvariantCulture));
             _edgeRipple = AddRow(ref y, "Edge ripple", defaults.EdgeRippleStrength.ToString("0.000", CultureInfo.InvariantCulture));
             _maxWaterZ = AddRow(ref y, "Max water Z", string.Empty);
+
+            Add(new Label("Dynamic expansion", true, 0x44, 0, 255, FontStyle.BlackBorder) { X = 10, Y = y + 4 });
+            y += ROW_H;
+
+            _dynamicExpansion = new Checkbox(0x00D2, 0x00D3, "Enable dynamic expansion", 1, HUE)
+            {
+                X = 10,
+                Y = y + 2,
+                IsChecked = false
+            };
+            Add(_dynamicExpansion);
+            y += ROW_H;
+
+            _dynamicMinWaterZ = AddRow(ref y, "Dyn min water Z", groundZ.ToString(CultureInfo.InvariantCulture));
+            _dynamicMaxWaterZ = AddRow(ref y, "Dyn max water Z", (groundZ + 2).ToString(CultureInfo.InvariantCulture));
+            _dynamicWaterZStep = AddRow(ref y, "Dyn water Z step", defaults.DynamicWaterZStep.ToString(CultureInfo.InvariantCulture));
+            _dynamicWaterZInterval = AddRow(ref y, "Dyn water Z interval (s)", defaults.DynamicWaterZIntervalSeconds.ToString("0.0", CultureInfo.InvariantCulture));
+            _dynamicMinRadius = AddRow(ref y, "Dyn min radius", defaults.DynamicMinRadius.ToString("0", CultureInfo.InvariantCulture));
+            _dynamicMaxRadius = AddRow(ref y, "Dyn max radius", defaults.DynamicMaxRadius.ToString("0", CultureInfo.InvariantCulture));
+            _dynamicRadiusStep = AddRow(ref y, "Dyn radius step (px)", defaults.DynamicRadiusStep.ToString("0", CultureInfo.InvariantCulture));
+            _dynamicRadiusInterval = AddRow(ref y, "Dyn radius interval (s)", defaults.DynamicRadiusIntervalSeconds.ToString("0.0", CultureInfo.InvariantCulture));
 
             int by = GUMP_H - 36;
             Add(new NiceButton(10, by, 100, 25, ButtonAction.Activate, "Spawn") { ButtonParameter = (int)ButtonId.Spawn });
@@ -145,6 +179,13 @@ namespace ClassicUO.Game.UI.Gumps
             _tileX.SetText(_world.Player.X.ToString(CultureInfo.InvariantCulture));
             _tileY.SetText(_world.Player.Y.ToString(CultureInfo.InvariantCulture));
             _tileZ.SetText(_world.Player.Z.ToString(CultureInfo.InvariantCulture));
+
+            if (_world.Map != null)
+            {
+                sbyte groundZ = _world.Map.GetTileZ(_world.Player.X, _world.Player.Y);
+                _dynamicMinWaterZ.SetText(groundZ.ToString(CultureInfo.InvariantCulture));
+                _dynamicMaxWaterZ.SetText((groundZ + 2).ToString(CultureInfo.InvariantCulture));
+            }
         }
 
         private void SpawnFromFields()
@@ -261,18 +302,94 @@ namespace ClassicUO.Game.UI.Gumps
             options.PivotHorizontalRipple = Math.Clamp(pivotHorizontalRipple, 0f, 1f);
             options.SurfaceShimmerStrength = Math.Max(0f, surfaceShimmer);
             options.EdgeRippleStrength = Math.Max(0f, edgeRipple);
+            options.DynamicExpansionEnabled = _dynamicExpansion.IsChecked;
 
-            string maxZText = _maxWaterZ.Text?.Trim() ?? string.Empty;
-            if (!string.IsNullOrEmpty(maxZText))
+            if (options.DynamicExpansionEnabled)
             {
-                if (!sbyte.TryParse(maxZText, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte maxWaterZ))
+                if (!sbyte.TryParse(_dynamicMinWaterZ.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte dynamicMinWaterZ))
                 {
-                    error = "Invalid max water Z (sbyte).";
+                    error = "Invalid dynamic min water Z.";
                     return false;
                 }
 
-                options.UseHeightMask = true;
-                options.MaxWaterZ = maxWaterZ;
+                if (!sbyte.TryParse(_dynamicMaxWaterZ.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte dynamicMaxWaterZ))
+                {
+                    error = "Invalid dynamic max water Z.";
+                    return false;
+                }
+
+                if (!sbyte.TryParse(_dynamicWaterZStep.Text, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte dynamicWaterZStep))
+                {
+                    error = "Invalid dynamic water Z step.";
+                    return false;
+                }
+
+                if (!float.TryParse(_dynamicWaterZInterval.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float dynamicWaterZInterval))
+                {
+                    error = "Invalid dynamic water Z interval.";
+                    return false;
+                }
+
+                if (!float.TryParse(_dynamicMinRadius.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float dynamicMinRadius))
+                {
+                    error = "Invalid dynamic min radius.";
+                    return false;
+                }
+
+                if (!float.TryParse(_dynamicMaxRadius.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float dynamicMaxRadius))
+                {
+                    error = "Invalid dynamic max radius.";
+                    return false;
+                }
+
+                if (!float.TryParse(_dynamicRadiusStep.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float dynamicRadiusStep))
+                {
+                    error = "Invalid dynamic radius step.";
+                    return false;
+                }
+
+                if (!float.TryParse(_dynamicRadiusInterval.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float dynamicRadiusInterval))
+                {
+                    error = "Invalid dynamic radius interval.";
+                    return false;
+                }
+
+                options.DynamicMinWaterZ = dynamicMinWaterZ;
+                options.DynamicMaxWaterZ = dynamicMaxWaterZ;
+                options.DynamicWaterZStep = dynamicWaterZStep;
+                options.DynamicWaterZIntervalSeconds = Math.Max(0f, dynamicWaterZInterval);
+                options.DynamicMinRadius = Math.Max(1f, dynamicMinRadius);
+                options.DynamicMaxRadius = Math.Max(1f, dynamicMaxRadius);
+                options.DynamicRadiusStep = Math.Max(0f, dynamicRadiusStep);
+                options.DynamicRadiusIntervalSeconds = Math.Max(0f, dynamicRadiusInterval);
+
+                bool radiusActive = options.DynamicRadiusStep > 0f
+                    && options.DynamicRadiusIntervalSeconds > 0f
+                    && options.DynamicMinRadius < options.DynamicMaxRadius;
+                bool waterZActive = options.DynamicWaterZStep > 0
+                    && options.DynamicWaterZIntervalSeconds > 0f
+                    && options.DynamicMinWaterZ < options.DynamicMaxWaterZ;
+
+                if (!radiusActive && !waterZActive)
+                {
+                    error = "Enable at least one timed step (radius or water Z with step > 0 and interval > 0).";
+                    return false;
+                }
+            }
+            else
+            {
+                string maxZText = _maxWaterZ.Text?.Trim() ?? string.Empty;
+                if (!string.IsNullOrEmpty(maxZText))
+                {
+                    if (!sbyte.TryParse(maxZText, NumberStyles.Integer, CultureInfo.InvariantCulture, out sbyte maxWaterZ))
+                    {
+                        error = "Invalid max water Z (sbyte).";
+                        return false;
+                    }
+
+                    options.UseHeightMask = true;
+                    options.MaxWaterZ = maxWaterZ;
+                }
             }
 
             return true;

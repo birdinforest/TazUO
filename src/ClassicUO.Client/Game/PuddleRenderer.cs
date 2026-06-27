@@ -212,7 +212,7 @@ namespace ClassicUO.Game
                 if (bindPuddleMask)
                 {
                     gd.Textures[1] = r.HeightMask;
-                    gd.SamplerStates[1] = SamplerState.PointClamp;
+                    gd.SamplerStates[1] = SamplerState.LinearClamp;
                     _effect.UseHeightMask!.SetValue(1f);
                     _effect.MaskTileStepU!.SetValue(ISO_TILE_WIDTH / rtW);
                     _effect.MaskTileStepV!.SetValue(ISO_TILE_WIDTH / rtH);
@@ -240,7 +240,7 @@ namespace ClassicUO.Game
                     if (bindPuddleMask)
                     {
                         gd.Textures[1] = r.HeightMask;
-                        gd.SamplerStates[1] = SamplerState.PointClamp;
+                        gd.SamplerStates[1] = SamplerState.LinearClamp;
                     }
 
                     pass.Apply();
@@ -361,7 +361,7 @@ namespace ClassicUO.Game
                 region,
                 minTX,
                 minTY,
-                region.Radius / ISO_TILE_WIDTH,
+                ComputeShapeTileRadius(region.Radius),
                 shape,
                 outW,
                 outH
@@ -382,6 +382,7 @@ namespace ClassicUO.Game
                     combined[i] = shape[i] * heightAlpha[i];
                 }
 
+                SoftenMaskEdges(combined, outW, outH, 0.5f);
                 SoftenMaskEdges(combined, outW, outH, 0.35f);
             }
 
@@ -546,15 +547,6 @@ namespace ClassicUO.Game
                     float tileY = (py + 0.5f) / sub;
                     float wet = SampleTileWetBilinear(tileWet, cols, rows, tileX, tileY);
 
-                    int ix = Math.Clamp((int)MathF.Floor(tileX), 0, cols - 1);
-                    int iy = Math.Clamp((int)MathF.Floor(tileY), 0, rows - 1);
-
-                    if (!IsHeightMaskBoundaryTile(tileWet, cols, rows, ix, iy))
-                    {
-                        output[py * outW + px] = wet >= 0.5f ? 1f : 0f;
-                        continue;
-                    }
-
                     float n1 = MaskHash(px, py);
                     float n2 = MaskHash(px + 137, py + 419);
                     float n3 = MaskHash(px * 3 + 91, py * 3 + 47);
@@ -563,8 +555,10 @@ namespace ClassicUO.Game
                     float fx = tileX - MathF.Floor(tileX);
                     float fy = tileY - MathF.Floor(tileY);
                     float ripple = MathF.Sin((fx + fy) * MathF.PI * 2.5f + noise * 6.28f) * 0.06f;
-                    float warped = wet + (noise - 0.5f) * 0.52f + ripple;
-                    output[py * outW + px] = SmoothStep(0.36f, 0.64f, warped);
+                    float edgeBlend = MathF.Min(wet, 1f - wet) * 4f;
+                    float edgeNoise = (noise - 0.5f) * (0.28f + 0.24f * MathF.Min(edgeBlend, 1f));
+                    float warped = wet + edgeNoise + ripple;
+                    output[py * outW + px] = SmoothStep(0.34f, 0.66f, warped);
                 }
             }
         }
@@ -651,37 +645,6 @@ namespace ClassicUO.Game
             float h0 = MaskHash((int)i, iy);
             float h1 = MaskHash((int)i + 1, iy);
             return h0 + (h1 - h0) * u;
-        }
-
-        private static bool IsHeightMaskBoundaryTile(float[] tileWet, int cols, int rows, int x, int y)
-        {
-            bool center = tileWet[y * cols + x] >= 0.5f;
-
-            for (int oy = -1; oy <= 1; oy++)
-            {
-                for (int ox = -1; ox <= 1; ox++)
-                {
-                    if (ox == 0 && oy == 0)
-                    {
-                        continue;
-                    }
-
-                    int nx = x + ox;
-                    int ny = y + oy;
-
-                    if (nx < 0 || ny < 0 || nx >= cols || ny >= rows)
-                    {
-                        continue;
-                    }
-
-                    if ((tileWet[ny * cols + nx] >= 0.5f) != center)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         private static float SampleTileWetBilinear(

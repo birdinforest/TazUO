@@ -23,6 +23,16 @@ namespace ClassicUO.Game
         public bool UseHeightMask { get; set; }
         public sbyte MaxWaterZ { get; set; }
 
+        public bool DynamicExpansionEnabled { get; set; }
+        public sbyte DynamicMinWaterZ { get; set; }
+        public sbyte DynamicMaxWaterZ { get; set; }
+        public sbyte DynamicWaterZStep { get; set; } = 1;
+        public float DynamicWaterZIntervalSeconds { get; set; } = 1f;
+        public float DynamicMinRadius { get; set; } = 22f;
+        public float DynamicMaxRadius { get; set; } = 88f;
+        public float DynamicRadiusStep { get; set; } = 10f;
+        public float DynamicRadiusIntervalSeconds { get; set; } = 0.5f;
+
         public static PuddleSpawnOptions FromPlayer(int tileX, int tileY, int tileZ)
         {
             return new PuddleSpawnOptions

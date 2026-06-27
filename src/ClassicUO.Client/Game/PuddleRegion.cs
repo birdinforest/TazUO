@@ -30,6 +30,27 @@ namespace ClassicUO.Game
         /// <summary>Rim ripple strength near the puddle outer mask edge (does not move reflection UVs).</summary>
         public float EdgeRippleStrength { get; set; } = 0.04f;
 
+        /// <summary>When true, <see cref="Radius"/> and/or <see cref="MaxWaterZ"/> change in discrete steps on a timer.</summary>
+        public bool DynamicExpansionEnabled { get; set; }
+
+        public sbyte DynamicMinWaterZ { get; set; }
+        public sbyte DynamicMaxWaterZ { get; set; }
+        /// <summary>Water Z levels added/removed per timed step.</summary>
+        public sbyte DynamicWaterZStep { get; set; } = 1;
+        /// <summary>Seconds between water-Z steps.</summary>
+        public float DynamicWaterZIntervalSeconds { get; set; } = 1f;
+        public float DynamicMinRadius { get; set; } = 22f;
+        public float DynamicMaxRadius { get; set; } = 88f;
+        /// <summary>Radius change in pixels per timed step.</summary>
+        public float DynamicRadiusStep { get; set; } = 10f;
+        /// <summary>Seconds between radius steps.</summary>
+        public float DynamicRadiusIntervalSeconds { get; set; } = 0.5f;
+
+        internal int DynamicRadiusDirection = 1;
+        internal int DynamicWaterZDirection = 1;
+        internal uint NextRadiusUpdateTick;
+        internal uint NextWaterZUpdateTick;
+
         /// <summary>When true, tiles at or above <see cref="MaxWaterZ"/> stay dry (land visible).</summary>
         public bool UseHeightMask { get; set; }
 
@@ -46,6 +67,16 @@ namespace ClassicUO.Game
         internal int MaskTileCols;
         internal int MaskTileRows;
         internal int MaskSubScale = 1;
+
+        internal bool AnimatesRadius =>
+            DynamicRadiusStep > 0f
+            && DynamicRadiusIntervalSeconds > 0f
+            && DynamicMinRadius < DynamicMaxRadius;
+
+        internal bool AnimatesWaterZ =>
+            DynamicWaterZStep > 0
+            && DynamicWaterZIntervalSeconds > 0f
+            && DynamicMinWaterZ < DynamicMaxWaterZ;
 
         internal void SetMaskBounds(int minTileX, int minTileY, int cols, int rows)
         {

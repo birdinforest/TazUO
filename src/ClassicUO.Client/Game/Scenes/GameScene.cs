@@ -924,6 +924,7 @@ namespace ClassicUO.Game.Scenes
 
             Profiler.EnterContext("WorldUpdate");
             _world.Update();
+            PuddleManager.Update(_world);
             _world.Weather.UpdateAudio();
             _animatedStaticsManager.Process();
             _world.BoatMovingManager.Update();
