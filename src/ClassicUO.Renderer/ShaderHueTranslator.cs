@@ -19,6 +19,7 @@ namespace ClassicUO.Renderer
         public const byte SHADER_LIGHTS = 9;
         public const byte SHADER_EFFECT_HUED = 10;
         public const byte SHADER_OUTLINE = 11;
+        public const byte SHADER_CONTACT_REFLECT = 12;
 
         private const byte GUMP_OFFSET = 20;
 
@@ -32,6 +33,10 @@ namespace ClassicUO.Renderer
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 GetOutlineHueVector(float alpha = 1f) => new(0, SHADER_OUTLINE, alpha);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static Vector3 GetContactReflectHueVector(float feetScreenUvY, float alpha = 1f) =>
+            new(feetScreenUvY, SHADER_CONTACT_REFLECT, alpha);
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static Vector3 GetHueVector(int hue, bool partial, float alpha, bool gump = false, bool effect = false)

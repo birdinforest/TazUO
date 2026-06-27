@@ -99,9 +99,9 @@ namespace ClassicUO.UnitTests.Game
 
             Vector3 result = InvokeColorToVector3(color);
 
-            result.X.Should().BeApproximately(1.0f, 0.01f, "Red should be 255/255 = 1.0");
-            result.Y.Should().BeApproximately(0.502f, 0.01f, "Green should be 128/255 ≈ 0.502");
-            result.Z.Should().BeApproximately(0.251f, 0.01f, "Blue should be 64/255 ≈ 0.251");
+            result.X.Should().Be(0f, "Hue index should be 0 for weather draws");
+            result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE, "Weather uses SHADER_NONE");
+            result.Z.Should().BeApproximately(1.0f, 0.01f, "Alpha should come from color.A");
         }
 
         [Fact]
@@ -111,9 +111,9 @@ namespace ClassicUO.UnitTests.Game
 
             Vector3 result = InvokeColorToVector3(color);
 
-            result.X.Should().BeGreaterOrEqualTo(0f, "Red should be clamped to >= 0");
-            result.Y.Should().BeGreaterOrEqualTo(0f, "Green should be clamped to >= 0");
-            result.Z.Should().BeGreaterOrEqualTo(0f, "Blue should be clamped to >= 0");
+            result.X.Should().Be(0f);
+            result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE);
+            result.Z.Should().BeGreaterOrEqualTo(0f, "Alpha should be clamped to >= 0");
         }
 
         [Fact]
@@ -123,9 +123,9 @@ namespace ClassicUO.UnitTests.Game
 
             Vector3 result = InvokeColorToVector3(color);
 
-            result.X.Should().BeLessOrEqualTo(1f, "Red should be clamped to <= 1.0");
-            result.Y.Should().BeLessOrEqualTo(1f, "Green should be clamped to <= 1.0");
-            result.Z.Should().BeLessOrEqualTo(1f, "Blue should be clamped to <= 1.0");
+            result.X.Should().Be(0f);
+            result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE);
+            result.Z.Should().BeLessOrEqualTo(1f, "Alpha should be clamped to <= 1.0");
         }
 
         [Fact]
@@ -135,7 +135,9 @@ namespace ClassicUO.UnitTests.Game
 
             Vector3 result = InvokeColorToVector3(color);
 
-            result.Should().Be(new Vector3(1f, 1f, 1f), "White color should convert to (1, 1, 1)");
+            result.X.Should().Be(0f);
+            result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE);
+            result.Z.Should().BeApproximately(1.0f, 0.01f);
         }
         #endregion
 
@@ -269,9 +271,9 @@ namespace ClassicUO.UnitTests.Game
             {
                 Vector3 result = InvokeColorToVector3(color);
 
-                result.X.Should().BeInRange(0f, 1f, $"{color} X component should be in valid range");
-                result.Y.Should().BeInRange(0f, 1f, $"{color} Y component should be in valid range");
-                result.Z.Should().BeInRange(0f, 1f, $"{color} Z component should be in valid range");
+                result.X.Should().Be(0f, $"{color} should use hue index 0");
+                result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE, $"{color} should use SHADER_NONE");
+                result.Z.Should().BeInRange(0f, 1f, $"{color} alpha should be in valid range");
             }
         }
 
@@ -327,9 +329,9 @@ namespace ClassicUO.UnitTests.Game
 
             Vector3 result = InvokeColorToVector3(color);
 
-            result.X.Should().BeApproximately(r / 255f, 0.01f, "Red conversion should be accurate");
-            result.Y.Should().BeApproximately(g / 255f, 0.01f, "Green conversion should be accurate");
-            result.Z.Should().BeApproximately(b / 255f, 0.01f, "Blue conversion should be accurate");
+            result.X.Should().Be(0f);
+            result.Y.Should().Be(ShaderHueTranslator.SHADER_NONE);
+            result.Z.Should().BeApproximately(1.0f, 0.01f, "Opaque colors should pass alpha=1");
         }
 
         [Fact]

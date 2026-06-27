@@ -141,24 +141,19 @@ namespace ClassicUO.Game
         }
 
         /// <summary>
-        /// Converts a Color to Vector3 for RGBA drawing with validation.
-        /// Returns white color if input is invalid.
+        /// Converts weather particle color to the batcher hue vector (shader mode + alpha).
+        /// RGB tint is carried by the white source texture; only alpha is passed here.
         /// </summary>
         private static Vector3 ColorToVector3(Color color)
         {
             try
             {
-                // Defensive: clamp values to valid range [0, 1]
-                float r = Math.Clamp(color.R / 255f, 0f, 1f);
-                float g = Math.Clamp(color.G / 255f, 0f, 1f);
-                float b = Math.Clamp(color.B / 255f, 0f, 1f);
-
-                return new Vector3(r, g, b);
+                float alpha = Math.Clamp(color.A / 255f, 0f, 1f);
+                return new Vector3(0, ShaderHueTranslator.SHADER_NONE, alpha);
             }
             catch
             {
-                // Fallback to white if conversion fails
-                return Vector3.One;
+                return new Vector3(0, ShaderHueTranslator.SHADER_NONE, 1f);
             }
         }
 

@@ -26,7 +26,10 @@ namespace ClassicUO.Game
             region.WaveStrength = options.WaveStrength;
             region.WaveSpeed = options.WaveSpeed;
             region.WaveScale = options.WaveScale;
+            region.PivotStableBand = options.PivotStableBand;
+            region.PivotHorizontalRipple = options.PivotHorizontalRipple;
 
+            PuddleSpawnOptions.ApplyDefaultHeightMask(options, world);
             if (options.UseHeightMask)
             {
                 region.UseHeightMask = true;

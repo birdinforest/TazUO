@@ -22,6 +22,9 @@ namespace ClassicUO.Renderer
         private const int MAX_VERTICES = MAX_SPRITES * 4;
         private const int MAX_INDICES = MAX_SPRITES * 6;
         private BlendState _blendState;
+        private readonly BlendState _contactMinBlend;
+        private Texture2D _sharedHueSampler0;
+        private Texture2D _sharedHueSampler1;
         private int _currentBufferPosition;
 
         private Effect _customEffect;
@@ -53,6 +56,16 @@ namespace ClassicUO.Renderer
         private bool _started;
         public bool ReflectionMode { get; set; }
         /// <summary>
+        /// When true with <see cref="ReflectionMode"/>, writes feet pivot Y (screen UV) into ContactRT
+        /// instead of sprite color. Only draws that called <c>SetReflectionPivotSlice</c> since the last sprite.
+        /// </summary>
+        public bool ReflectionContactWriteMode { get; set; }
+        /// <summary>
+        /// Screen Y of the mirror pivot for the current reflection slice (pre-transform coords).
+        /// </summary>
+        public float ReflectionFeetScreenY { get; set; }
+        public bool ReflectionContactFeetValid { get; set; }
+        /// <summary>
         /// Distance in pixels from the sprite texture bottom (destY + H) up to the tile ground
         /// anchor (RealScreenPosition.Y). Set per draw call before AddSprite in reflection pass.
         /// </summary>
@@ -70,6 +83,8 @@ namespace ClassicUO.Renderer
         private PositionNormalTextureColor4[] _vertexInfo;
 
 
+        public bool SupportsReflectionContactWrite { get; private set; }
+
         public UltimaBatcher2D(GraphicsDevice device)
         {
             GraphicsDevice = device;
@@ -81,6 +96,16 @@ namespace ClassicUO.Renderer
             _indexBuffer.SetData(GenerateIndexArray());
 
             _blendState = BlendState.AlphaBlend;
+            _contactMinBlend = new BlendState
+            {
+                ColorWriteChannels = ColorWriteChannels.Red,
+                ColorSourceBlend = Blend.One,
+                ColorDestinationBlend = Blend.One,
+                ColorBlendFunction = BlendFunction.Min,
+                AlphaSourceBlend = Blend.One,
+                AlphaDestinationBlend = Blend.One,
+                AlphaBlendFunction = BlendFunction.Max,
+            };
             _sampler = SamplerState.PointClamp;
             _rasterizerState = new RasterizerState
             {
@@ -105,6 +130,7 @@ namespace ClassicUO.Renderer
             _stencil = Stencil;
 
             _basicUOEffect = new BasicUOEffect(device);
+            SupportsReflectionContactWrite = _basicUOEffect.SupportsContactReflect;
         }
 
 
@@ -135,11 +161,40 @@ namespace ClassicUO.Renderer
             _basicUOEffect?.Dispose();
             _vertexBuffer.Dispose();
             _indexBuffer.Dispose();
+            _contactMinBlend?.Dispose();
             _rasterizerStateReflect?.Dispose();
         }
 
 
         public void SetBrightlight(float f) => _basicUOEffect.Brighlight.SetValue(f);
+
+        /// <summary>
+        /// Registers the global hue/light lookup textures bound to pixel shader s1/s2.
+        /// Re-applied on every batch flush so custom passes (e.g. puddles) cannot leave stale bindings.
+        /// </summary>
+        public void SetSharedHueSamplers(Texture2D hueSampler0, Texture2D hueSampler1)
+        {
+            _sharedHueSampler0 = hueSampler0;
+            _sharedHueSampler1 = hueSampler1;
+            BindSharedHueSamplers();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void BindSharedHueSamplers()
+        {
+            if (_sharedHueSampler0 != null && !_sharedHueSampler0.IsDisposed)
+            {
+                GraphicsDevice.Textures[1] = _sharedHueSampler0;
+            }
+
+            if (_sharedHueSampler1 != null && !_sharedHueSampler1.IsDisposed)
+            {
+                GraphicsDevice.Textures[2] = _sharedHueSampler1;
+            }
+
+            GraphicsDevice.SamplerStates[1] = SamplerState.PointClamp;
+            GraphicsDevice.SamplerStates[2] = SamplerState.PointClamp;
+        }
 
         // For IFontStashRenderer
         public void Draw(Texture2D texture, Vector2 position, Rectangle? sourceRectangle, Color color, float rotation, Vector2 scale, float depth)
@@ -440,6 +495,11 @@ namespace ClassicUO.Renderer
                 return;
             }
 
+            if (ReflectionContactWriteMode)
+            {
+                return;
+            }
+
             float width = sourceRect.Width;
             float height = sourceRect.Height * 0.5f;
             float translatedY = position.Y + height - 10;
@@ -522,6 +582,11 @@ namespace ClassicUO.Renderer
         {
             // Skip if texture is null or disposed
             if (texture == null || texture.IsDisposed)
+            {
+                return;
+            }
+
+            if (ReflectionContactWriteMode)
             {
                 return;
             }
@@ -1319,6 +1384,19 @@ namespace ClassicUO.Renderer
                 destinationH = -destinationH;
             }
 
+            if (ReflectionContactWriteMode)
+            {
+                if (!ReflectionContactFeetValid)
+                {
+                    return;
+                }
+
+                ReflectionContactFeetValid = false;
+
+                float feetUvY = (ReflectionFeetScreenY + _transformMatrix.M42) / GraphicsDevice.Viewport.Height;
+                color = ShaderHueTranslator.GetContactReflectHueVector(feetUvY, color.Z);
+            }
+
             SetVertex
             (
                 ref _vertexInfo[_numSprites],
@@ -1471,6 +1549,11 @@ namespace ClassicUO.Renderer
                 return false;
             }
 
+            if (ReflectionContactWriteMode)
+            {
+                return false;
+            }
+
             EnsureSize();
             _textureInfo[_numSprites++] = texture;
 
@@ -1479,12 +1562,11 @@ namespace ClassicUO.Renderer
 
         private void ApplyStates()
         {
-            GraphicsDevice.BlendState = _blendState;
+            GraphicsDevice.BlendState = ReflectionContactWriteMode ? _contactMinBlend : _blendState;
             GraphicsDevice.DepthStencilState = _stencil;
             GraphicsDevice.RasterizerState = ReflectionMode ? _rasterizerStateReflect : _rasterizerState;
             GraphicsDevice.SamplerStates[0] = _sampler;
-            GraphicsDevice.SamplerStates[1] = SamplerState.PointClamp;
-            GraphicsDevice.SamplerStates[2] = SamplerState.PointClamp;
+            BindSharedHueSamplers();
             GraphicsDevice.SamplerStates[3] = SamplerState.PointClamp;
 
             GraphicsDevice.Indices = _indexBuffer;
@@ -1584,6 +1666,7 @@ namespace ClassicUO.Renderer
                 _basicUOEffect.Pass.Apply();
             }
 
+            BindSharedHueSamplers();
             GraphicsDevice.Textures[0] = texture;
 
             if (_customEffect != null)

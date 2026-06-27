@@ -200,6 +200,7 @@ namespace ClassicUO
             SetScene(new MainScene(this));
 #else
             UO.Load(this);
+            _uoSpriteBatch.SetSharedHueSamplers(UO.HueSamplerTexture0, UO.HueSamplerTexture1);
 
             PNGLoader.Instance.GraphicsDevice = GraphicsDevice;
             PNGLoader.Instance.LoadResourceAssets(Client.Game.UO.Gumps.GetGumpsLoader);

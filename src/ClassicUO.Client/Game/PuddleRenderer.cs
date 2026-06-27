@@ -2,6 +2,7 @@
 
 using System;
 using System.Collections.Generic;
+using ClassicUO;
 using ClassicUO.Renderer;
 using ClassicUO.Renderer.Effects;
 using Microsoft.Xna.Framework;
@@ -32,6 +33,8 @@ namespace ClassicUO.Game
         private readonly PuddleVertex[] _verts = new PuddleVertex[MAX_PUDDLES * VERTS_PER_PUDDLE];
 
         public RenderTarget2D? ReflectionRT { get; private set; }
+        public RenderTarget2D? ContactRT { get; private set; }
+        public bool SupportsContactMap => _effect?.SupportsContactMap == true && ContactRT != null;
 
         public PuddleRenderer(GraphicsDevice gd)
         {
@@ -55,6 +58,24 @@ namespace ClassicUO.Game
         /// </summary>
         public void BeginReflectionTarget(GraphicsDevice gd, int rtW, int rtH)
         {
+            EnsureReflectionTargets(gd, rtW, rtH);
+            gd.SetRenderTarget(ReflectionRT);
+            gd.Clear(Color.Transparent);
+        }
+
+        /// <summary>
+        /// Clears and binds ContactRT for the feet-pivot contact map pass.
+        /// Cleared to 1.0 (sentinel: no pivot). Min-blended writes store the topmost feet line per pixel.
+        /// </summary>
+        public void BeginContactTarget(GraphicsDevice gd, int rtW, int rtH)
+        {
+            EnsureReflectionTargets(gd, rtW, rtH);
+            gd.SetRenderTarget(ContactRT);
+            gd.Clear(new Color(1f, 0f, 0f, 0f));
+        }
+
+        private void EnsureReflectionTargets(GraphicsDevice gd, int rtW, int rtH)
+        {
             if (
                 ReflectionRT == null
                 || ReflectionRT.IsDisposed
@@ -66,8 +87,16 @@ namespace ClassicUO.Game
                 ReflectionRT = new RenderTarget2D(gd, rtW, rtH, false, SurfaceFormat.Color, DepthFormat.None);
             }
 
-            gd.SetRenderTarget(ReflectionRT);
-            gd.Clear(Color.Transparent);
+            if (
+                ContactRT == null
+                || ContactRT.IsDisposed
+                || ContactRT.Width != rtW
+                || ContactRT.Height != rtH
+            )
+            {
+                ContactRT?.Dispose();
+                ContactRT = new RenderTarget2D(gd, rtW, rtH, false, SurfaceFormat.Color, DepthFormat.None);
+            }
         }
 
         /// <summary>
@@ -78,6 +107,8 @@ namespace ClassicUO.Game
         {
             gd.SetRenderTarget(null);
         }
+
+        public void EndContactTarget(GraphicsDevice gd) => EndReflectionTarget(gd);
 
         public void Draw(
             GraphicsDevice gd,
@@ -107,14 +138,19 @@ namespace ClassicUO.Game
             RasterizerState prevRaster = gd.RasterizerState;
             VertexBufferBinding[] prevVB = gd.GetVertexBuffers();
             IndexBuffer prevIB = gd.Indices;
-            Texture prevTex1 = gd.Textures[1];
-            SamplerState prevSamp1 = gd.SamplerStates[1];
+            Texture prevTex0 = gd.Textures[0];
+            SamplerState prevSamp0 = gd.SamplerStates[0];
 
             gd.BlendState = BlendState.AlphaBlend;
             gd.DepthStencilState = DepthStencilState.None;
             gd.RasterizerState = RasterizerState.CullNone;
             gd.Textures[0] = ReflectionRT;
             gd.SamplerStates[0] = SamplerState.LinearClamp;
+            if (_effect.SupportsContactMap && ContactRT != null)
+            {
+                gd.Textures[2] = ContactRT;
+                gd.SamplerStates[2] = SamplerState.PointClamp;
+            }
             gd.SetVertexBuffer(_vb);
             gd.Indices = _ib;
 
@@ -155,21 +191,26 @@ namespace ClassicUO.Game
                 _effect.WaveStrength.SetValue(r.WaveStrength);
                 _effect.WaveSpeed.SetValue(r.WaveSpeed);
                 _effect.WaveScale.SetValue(r.WaveScale);
+                _effect.PivotStableBand?.SetValue(r.PivotStableBand);
+                _effect.PivotHorizontalRipple?.SetValue(r.PivotHorizontalRipple);
+                _effect.UseContactMap?.SetValue(
+                    _effect.SupportsContactMap && ContactRT != null ? 1f : 0f
+                );
 
                 // Tile seed for stable organic outer edge (independent of height mask).
                 _effect.PuddleTileX?.SetValue(r.TileX);
                 _effect.PuddleTileY?.SetValue(r.TileY);
 
                 bool bindPuddleMask =
-                    _effect.SupportsHeightMask
-                    && r.HeightMask != null
+                    r.HeightMask != null
                     && r.MaskTileCols > 0
-                    && r.MaskTileRows > 0;
+                    && r.MaskTileRows > 0
+                    && _effect.SupportsHeightMask;
 
                 if (bindPuddleMask)
                 {
                     gd.Textures[1] = r.HeightMask;
-                    gd.SamplerStates[1] = SamplerState.LinearClamp;
+                    gd.SamplerStates[1] = SamplerState.PointClamp;
                     _effect.UseHeightMask!.SetValue(1f);
                     _effect.MaskTileStepU!.SetValue(ISO_TILE_WIDTH / rtW);
                     _effect.MaskTileStepV!.SetValue(ISO_TILE_WIDTH / rtH);
@@ -187,6 +228,19 @@ namespace ClassicUO.Game
 
                 foreach (EffectPass pass in _effect.CurrentTechnique.Passes)
                 {
+                    gd.Textures[0] = ReflectionRT;
+                    if (_effect.SupportsContactMap && ContactRT != null)
+                    {
+                        gd.Textures[2] = ContactRT;
+                        gd.SamplerStates[2] = SamplerState.PointClamp;
+                    }
+
+                    if (bindPuddleMask)
+                    {
+                        gd.Textures[1] = r.HeightMask;
+                        gd.SamplerStates[1] = SamplerState.PointClamp;
+                    }
+
                     pass.Apply();
                     gd.DrawIndexedPrimitives(
                         PrimitiveType.TriangleList,
@@ -202,8 +256,9 @@ namespace ClassicUO.Game
             gd.BlendState = prevBlend;
             gd.DepthStencilState = prevDepth;
             gd.RasterizerState = prevRaster;
-            gd.Textures[1] = prevTex1;
-            gd.SamplerStates[1] = prevSamp1;
+            gd.Textures[0] = prevTex0;
+            gd.SamplerStates[0] = prevSamp0;
+            RestoreSharedHueSamplerBindings(gd);
 
             if (prevVB != null && prevVB.Length > 0)
             {
@@ -211,6 +266,31 @@ namespace ClassicUO.Game
             }
 
             gd.Indices = prevIB;
+        }
+
+        /// <summary>
+        /// Puddle.fx reuses global sampler slots s1/s2; restore hue/light lookups for world batcher and weather.
+        /// </summary>
+        private static void RestoreSharedHueSamplerBindings(GraphicsDevice gd)
+        {
+            UltimaOnline uo = Client.Game?.UO;
+            if (uo == null)
+            {
+                return;
+            }
+
+            if (uo.HueSamplerTexture0 != null && !uo.HueSamplerTexture0.IsDisposed)
+            {
+                gd.Textures[1] = uo.HueSamplerTexture0;
+            }
+
+            if (uo.HueSamplerTexture1 != null && !uo.HueSamplerTexture1.IsDisposed)
+            {
+                gd.Textures[2] = uo.HueSamplerTexture1;
+            }
+
+            gd.SamplerStates[1] = SamplerState.PointClamp;
+            gd.SamplerStates[2] = SamplerState.PointClamp;
         }
 
         internal static void RebuildPuddleMask(GraphicsDevice gd, PuddleRegion region, World world)
@@ -715,6 +795,7 @@ namespace ClassicUO.Game
             _vb?.Dispose();
             _ib?.Dispose();
             ReflectionRT?.Dispose();
+            ContactRT?.Dispose();
         }
     }
 }

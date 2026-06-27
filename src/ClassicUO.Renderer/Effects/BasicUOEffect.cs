@@ -12,8 +12,27 @@ namespace ClassicUO.Renderer.Effects
             Brighlight = Parameters["Brightlight"];
             TexelSize = Parameters["TexelSize"];
 
+            SupportsContactReflect = TryGetParameter(this, "ContactWriteSupported", out _);
+
             CurrentTechnique = Techniques["HueTechnique"];
             Pass = CurrentTechnique.Passes[0];
+        }
+
+        public bool SupportsContactReflect { get; }
+
+        private static bool TryGetParameter(Effect effect, string name, out EffectParameter? parameter)
+        {
+            foreach (EffectParameter p in effect.Parameters)
+            {
+                if (p.Name == name)
+                {
+                    parameter = p;
+                    return true;
+                }
+            }
+
+            parameter = null;
+            return false;
         }
 
         public EffectParameter MatrixTransform { get; }

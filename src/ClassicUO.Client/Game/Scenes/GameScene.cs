@@ -1284,26 +1284,51 @@ namespace ClassicUO.Game.Scenes
             // instead of upward — mirroring each object around its own feet, not a shared pivot.
             if (hasReflection)
             {
-                _puddleRenderer!.BeginReflectionTarget(
-                    batcher.GraphicsDevice,
-                    _worldRenderTarget.Width,
-                    _worldRenderTarget.Height
-                );
+                int rtW = _worldRenderTarget.Width;
+                int rtH = _worldRenderTarget.Height;
+
+                _puddleRenderer!.BeginReflectionTarget(batcher.GraphicsDevice, rtW, rtH);
 
                 batcher.ReflectionMode = true;
+                batcher.ReflectionContactWriteMode = false;
                 batcher.SetSampler(SamplerState.PointClamp);
                 batcher.Begin(null, matrix);
                 batcher.SetBrightlight(brightlight);
                 batcher.SetStencil(DepthStencilState.Default);
                 RenderedObjectsCount = 0;
-                DrawWorldObjectLayers(batcher);
+                DrawWorldObjectLayers(batcher, drawWeather: false);
                 batcher.SetSampler(null);
                 batcher.SetStencil(null);
                 batcher.End();
                 batcher.ReflectionMode = false;
                 batcher.ReflectionPivotOffset = 0f;
+                batcher.ReflectionContactFeetValid = false;
 
                 _puddleRenderer!.EndReflectionTarget(batcher.GraphicsDevice);
+
+                if (_puddleRenderer.SupportsContactMap && batcher.SupportsReflectionContactWrite)
+                {
+                    _puddleRenderer!.BeginContactTarget(batcher.GraphicsDevice, rtW, rtH);
+
+                    batcher.ReflectionMode = true;
+                    batcher.ReflectionContactWriteMode = true;
+                    batcher.SetSampler(SamplerState.PointClamp);
+                    batcher.Begin(null, matrix);
+                    batcher.SetBrightlight(brightlight);
+                    batcher.SetStencil(DepthStencilState.Default);
+                    RenderedObjectsCount = 0;
+                    DrawWorldObjectLayers(batcher, drawWeather: false);
+                    batcher.SetSampler(null);
+                    batcher.SetStencil(null);
+                    batcher.End();
+                    batcher.ReflectionMode = false;
+                    batcher.ReflectionContactWriteMode = false;
+                    batcher.ReflectionPivotOffset = 0f;
+                    batcher.ReflectionContactFeetValid = false;
+
+                    _puddleRenderer!.EndContactTarget(batcher.GraphicsDevice);
+                }
+
                 batcher.GraphicsDevice.SetRenderTarget(_worldRenderTarget);
             }
 
@@ -1388,10 +1413,14 @@ namespace ClassicUO.Game.Scenes
         }
 
         /// <summary>
-        /// Draws statics, animations, effects, transparency, multi placement, and weather.
+        /// Draws statics, animations, effects, transparency, multi placement, and optionally weather.
         /// Caller must have batcher.Begin active with matrix/brightlight/stencil configured.
         /// </summary>
-        private void DrawWorldObjectLayers(UltimaBatcher2D batcher)
+        /// <param name="drawWeather">
+        /// When false, skips weather (used for puddle reflection/contact RT passes so weather is not
+        /// simulated or drawn multiple times per frame).
+        /// </param>
+        private void DrawWorldObjectLayers(UltimaBatcher2D batcher, bool drawWeather = true)
         {
             Profiler.EnterContext("DrawObjects");
             Profiler.EnterContext("Statics");
@@ -1427,7 +1456,7 @@ namespace ClassicUO.Game.Scenes
             }
 
             // draw weather (DisableWeather also checked inside Weather.Draw)
-            if (ProfileManager.CurrentProfile?.DisableWeather != true)
+            if (drawWeather && ProfileManager.CurrentProfile?.DisableWeather != true)
             {
                 Profiler.EnterContext("Weather");
                 _world.Weather.Draw(batcher, 0, 0, MAX_LAYER_DEPTH - 1);

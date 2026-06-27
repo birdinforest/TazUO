@@ -10,7 +10,11 @@
 #define LIGHTS 9
 #define EFFECT_HUED 10
 #define OUTLINE 11
+#define CONTACT_REFLECT 12
 #define GUMP 20
+
+// Marker for C# runtime detection (Contact RT pass requires recompiled IsometricWorld.fxc).
+float ContactWriteSupported;
 
 const static float3 LIGHT_DIRECTION = float3(0.0f, 1.0f, 1.0f);
 
@@ -183,6 +187,11 @@ float4 PixelShader_Hue(PS_INPUT IN) : COLOR0
 		color.r = 0;
 		color.g = 0;
 		color.b = 0;
+	}
+	else if (mode == CONTACT_REFLECT)
+	{
+		// Hue.x = feet pivot line in screen UV space (0..1, top=0).
+		return float4(IN.Hue.x, 0, 0, color.a * alpha);
 	}
 	else if (mode == LIGHTS)
 	{

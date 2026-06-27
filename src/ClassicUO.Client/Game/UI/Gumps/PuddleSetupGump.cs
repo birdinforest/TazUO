@@ -18,7 +18,7 @@ namespace ClassicUO.Game.UI.Gumps
         private const int FIELD_W = 132;
         private const int ROW_H = 28;
         private const int GUMP_W = 360;
-        private const int GUMP_H = 470;
+        private const int GUMP_H = 526;
 
         private enum ButtonId
         {
@@ -38,6 +38,8 @@ namespace ClassicUO.Game.UI.Gumps
         private readonly StbTextBox _waveStrength;
         private readonly StbTextBox _waveSpeed;
         private readonly StbTextBox _waveScale;
+        private readonly StbTextBox _pivotStableBand;
+        private readonly StbTextBox _pivotHorizontalRipple;
         private readonly StbTextBox _maxWaterZ;
 
         public PuddleSetupGump(World world)
@@ -56,7 +58,7 @@ namespace ClassicUO.Game.UI.Gumps
             Add(new AlphaBlendControl { X = 0, Y = 0, Width = GUMP_W, Height = GUMP_H, Alpha = 0.88f });
 
             Add(new Label("Ground Puddle Setup", true, 0x44, 0, 255, FontStyle.BlackBorder) { X = 10, Y = 8 });
-            Add(new Label("(blank maxWaterZ = no height clip)", false, 0x35, 0, 255, FontStyle.BlackBorder) { X = 10, Y = 24 });
+            Add(new Label("(blank maxWaterZ = terrain clip at tile Z+1)", false, 0x35, 0, 255, FontStyle.BlackBorder) { X = 10, Y = 24 });
 
             PuddleSpawnOptions defaults = world.Player != null
                 ? PuddleSpawnOptions.FromPlayer(world.Player.X, world.Player.Y, world.Player.Z)
@@ -72,6 +74,8 @@ namespace ClassicUO.Game.UI.Gumps
             _waveStrength = AddRow(ref y, "Wave strength", defaults.WaveStrength.ToString("0.000", CultureInfo.InvariantCulture));
             _waveSpeed = AddRow(ref y, "Wave speed", defaults.WaveSpeed.ToString("0.0", CultureInfo.InvariantCulture));
             _waveScale = AddRow(ref y, "Wave scale", defaults.WaveScale.ToString("0", CultureInfo.InvariantCulture));
+            _pivotStableBand = AddRow(ref y, "Pivot stable band", defaults.PivotStableBand.ToString("0.000", CultureInfo.InvariantCulture));
+            _pivotHorizontalRipple = AddRow(ref y, "Pivot horiz ripple", defaults.PivotHorizontalRipple.ToString("0.00", CultureInfo.InvariantCulture));
             _maxWaterZ = AddRow(ref y, "Max water Z", string.Empty);
 
             int by = GUMP_H - 36;
@@ -215,6 +219,18 @@ namespace ClassicUO.Game.UI.Gumps
                 return false;
             }
 
+            if (!float.TryParse(_pivotStableBand.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float pivotStableBand))
+            {
+                error = "Invalid pivot stable band.";
+                return false;
+            }
+
+            if (!float.TryParse(_pivotHorizontalRipple.Text, NumberStyles.Float, CultureInfo.InvariantCulture, out float pivotHorizontalRipple))
+            {
+                error = "Invalid pivot horizontal ripple.";
+                return false;
+            }
+
             options.TileX = tileX;
             options.TileY = tileY;
             options.TileZ = tileZ;
@@ -224,6 +240,8 @@ namespace ClassicUO.Game.UI.Gumps
             options.WaveStrength = Math.Max(0f, waveStrength);
             options.WaveSpeed = Math.Max(0.001f, waveSpeed);
             options.WaveScale = Math.Max(1f, waveScale);
+            options.PivotStableBand = Math.Max(0.0001f, pivotStableBand);
+            options.PivotHorizontalRipple = Math.Clamp(pivotHorizontalRipple, 0f, 1f);
 
             string maxZText = _maxWaterZ.Text?.Trim() ?? string.Empty;
             if (!string.IsNullOrEmpty(maxZText))

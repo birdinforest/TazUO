@@ -28,6 +28,10 @@ namespace ClassicUO
         public Renderer.Sounds.Sound Sounds { get; private set; }
         public World World { get; private set; }
         public GameCursor GameCursor { get; private set; }
+        /// <summary>Hue lookup texture bound to pixel shader sampler s1 during world drawing.</summary>
+        public Texture2D HueSamplerTexture0 { get; private set; }
+        /// <summary>Colored light lookup texture bound to pixel shader sampler s2 during world drawing.</summary>
+        public Texture2D HueSamplerTexture1 { get; private set; }
 
         public ClientVersion Version { get; private set; }
         public ClientFlags Protocol { get; set; }
@@ -78,8 +82,11 @@ namespace ClassicUO
                 );
             }
 
-            game.GraphicsDevice.Textures[1] = hueSamplers[0];
-            game.GraphicsDevice.Textures[2] = hueSamplers[1];
+            HueSamplerTexture0 = hueSamplers[0];
+            HueSamplerTexture1 = hueSamplers[1];
+
+            game.GraphicsDevice.Textures[1] = HueSamplerTexture0;
+            game.GraphicsDevice.Textures[2] = HueSamplerTexture1;
 
             Animations = new Renderer.Animations.Animations(FileManager.Animations, game.GraphicsDevice);
             Arts = new Renderer.Arts.Art(FileManager.Arts, FileManager.Hues, game.GraphicsDevice);

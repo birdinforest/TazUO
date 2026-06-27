@@ -43,6 +43,8 @@ namespace ClassicUO.Game.GameObjects
             {
                 // Mirror around feetScreenY (tile ground contact / opaque art base).
                 batcher.ReflectionPivotOffset = (drawY + drawHeight) - feetScreenY;
+                batcher.ReflectionFeetScreenY = feetScreenY;
+                batcher.ReflectionContactFeetValid = true;
             }
         }
 

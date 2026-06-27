@@ -34,11 +34,34 @@ namespace ClassicUO.Renderer.Effects
                 MaskMinTileY = Parameters["MaskMinTileY"];
                 MaskTileCols = Parameters["MaskTileCols"];
                 MaskTileRows = Parameters["MaskTileRows"];
-                PuddleTileX = Parameters["PuddleTileX"];
-                PuddleTileY = Parameters["PuddleTileY"];
                 if (TryGetParameter(this, "MaskSubScale", out EffectParameter? maskSubScale))
                 {
                     MaskSubScale = maskSubScale;
+                }
+            }
+
+            if (TryGetParameter(this, "PuddleTileX", out EffectParameter? puddleTileX))
+            {
+                PuddleTileX = puddleTileX;
+            }
+
+            if (TryGetParameter(this, "PuddleTileY", out EffectParameter? puddleTileY))
+            {
+                PuddleTileY = puddleTileY;
+            }
+
+            SupportsContactMap = TryGetParameter(this, "UseContactMap", out EffectParameter? useContactMap);
+            if (SupportsContactMap)
+            {
+                UseContactMap = useContactMap!;
+                if (TryGetParameter(this, "PivotStableBand", out EffectParameter? pivotStableBand))
+                {
+                    PivotStableBand = pivotStableBand;
+                }
+
+                if (TryGetParameter(this, "PivotHorizontalRipple", out EffectParameter? pivotHorizontalRipple))
+                {
+                    PivotHorizontalRipple = pivotHorizontalRipple;
                 }
             }
 
@@ -46,6 +69,7 @@ namespace ClassicUO.Renderer.Effects
         }
 
         public bool SupportsHeightMask { get; }
+        public bool SupportsContactMap { get; }
 
         public static bool TryCreate(GraphicsDevice graphicsDevice, out PuddleEffect? effect)
         {
@@ -120,5 +144,8 @@ namespace ClassicUO.Renderer.Effects
         public EffectParameter? PuddleTileX { get; }
         public EffectParameter? PuddleTileY { get; }
         public EffectParameter? MaskSubScale { get; }
+        public EffectParameter? UseContactMap { get; }
+        public EffectParameter? PivotStableBand { get; }
+        public EffectParameter? PivotHorizontalRipple { get; }
     }
 }

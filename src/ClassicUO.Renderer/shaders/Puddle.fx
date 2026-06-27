@@ -11,6 +11,9 @@ float     ReflectStrength;
 float     WaveStrength;
 float     WaveSpeed;
 float     WaveScale;
+float     PivotStableBand;
+float     PivotHorizontalRipple;
+float     UseContactMap;
 
 float UseHeightMask; // 1 = sample combined puddle mask (shape + optional height)
 float MaskTileStepU;
@@ -25,6 +28,7 @@ float MaskSubScale;
 
 sampler ReflectionSampler : register(s0);
 sampler HeightMaskSampler : register(s1);
+sampler ContactMapSampler : register(s2);
 
 float noiseHash(float2 p)
 {
@@ -121,6 +125,30 @@ float ComputeOuterMaskFallback(float2 uv)
     return 1.0 - smoothstep(0.68, 1.12, dist - wobble);
 }
 
+float ComputeReflectionAlphaPivotFalloff(float2 uv)
+{
+    float alpha = tex2D(ReflectionSampler, uv).a;
+    float alphaAbove = tex2D(ReflectionSampler, uv + float2(0.0, -0.0015)).a;
+    float pivotEdge = saturate((alpha - alphaAbove) * 10.0 + alpha * 0.35);
+    return saturate(1.0 - pivotEdge * 0.92);
+}
+
+float ComputeReflectionDistortFalloff(float2 uv)
+{
+    if (UseContactMap > 0.5f)
+    {
+        float contactY = tex2D(ContactMapSampler, uv).r;
+        // 1.0 = cleared sentinel (no reflector pivot at this pixel)
+        if (contactY >= 0.999f)
+            return ComputeReflectionAlphaPivotFalloff(uv);
+
+        float distBelowPivot = max(0.0, uv.y - contactY);
+        return smoothstep(0.0, max(PivotStableBand, 0.0001f), distBelowPivot);
+    }
+
+    return ComputeReflectionAlphaPivotFalloff(uv);
+}
+
 float4 PuddlePS(PS_INPUT IN) : COLOR0
 {
     float2 uv = IN.ScreenUV;
@@ -137,7 +165,13 @@ float4 PuddlePS(PS_INPUT IN) : COLOR0
     float timeScale = max(WaveSpeed, 0.001f);
     float wn1 = valueNoise(uv * WaveScale + float2(Time * timeScale * 0.65f, Time * timeScale * 0.30f));
     float wn2 = valueNoise(uv * (WaveScale * 0.8f) + float2(-Time * timeScale * 0.45f, Time * timeScale * 0.55f));
-    float2 distort = (float2(wn1, wn2) - 0.5f) * WaveStrength;
+    float2 distortRaw = (float2(wn1, wn2) - 0.5f) * WaveStrength;
+
+    float falloff = ComputeReflectionDistortFalloff(uv);
+    float horizRipple = lerp(PivotHorizontalRipple, 1.0f, falloff);
+    float2 distort;
+    distort.x = distortRaw.x * horizRipple;
+    distort.y = distortRaw.y * falloff;
 
     float2 reflUV = clamp(float2(uv.x + distort.x, uv.y + distort.y), 0.001f, 0.999f);
     float4 reflection = tex2D(ReflectionSampler, reflUV);
