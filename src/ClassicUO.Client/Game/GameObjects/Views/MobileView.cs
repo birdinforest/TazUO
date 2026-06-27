@@ -840,6 +840,9 @@ namespace ClassicUO.Game.GameObjects
 
                             for (int i = 0; i < count; ++i)
                             {
+                                float sliceH = rect.Height * owner.Scale;
+                                SetReflectionPivotSlice(batcher, feetScreenY, pos.Y, sliceH);
+
                                 batcher.Draw(
                                     spriteInfo.Texture,
                                     pos,
@@ -852,7 +855,7 @@ namespace ClassicUO.Game.GameObjects
                                     depth + 1f + (i * tiles)
                                 );
 
-                                pos.Y += rect.Height * owner.Scale;
+                                pos.Y += sliceH;
                                 rect.Y += rect.Height;
                                 rect.Height = remains;
                                 remains -= rect.Height;
