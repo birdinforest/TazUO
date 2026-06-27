@@ -117,10 +117,6 @@ namespace ClassicUO.Game
 
         internal SplashEffect SplashEffect { get; }
 
-        internal RippleEffect RippleEffect { get; }
-
-        internal SplashEffect SplashEffect { get; }
-
         public InfoBarManager InfoBars { get; }
 
         public Dictionary<uint, Item> Items { get; } = new Dictionary<uint, Item>();
