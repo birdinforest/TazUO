@@ -80,6 +80,23 @@ The build system automatically copies platform-specific native libraries:
 - `external/lib64/` → Linux x64 libraries  
 - `external/osx/` → macOS libraries
 
+### HLSL shaders (`.fx` → `.fxc`)
+
+Shader sources live under `src/ClassicUO.Renderer/shaders/` (e.g. `IsometricWorld.fx`, `Puddle.fx`, `xBR.fx`). Compiled binaries (`.fxc`) are embedded at C# build time via FileEmbed.
+
+**Manual compile only (developers):** run `src/ClassicUO.Renderer/shaders/compile_shaders.bat` (Windows + `fxc.exe` from the legacy DirectX SDK), then `dotnet build --no-incremental` so embedded `.fxc` bytes refresh.
+
+## AI Agent Guidelines
+
+### Do not auto-compile shaders
+
+**AI agents must not automatically compile shader files** as part of routine implementation or fix tasks.
+
+- Do **not** run `fxc.exe`, `compile_shaders.bat`, `compile_shaders.sh`, `wine fxc`, or similar unless the user **explicitly** asks you to compile shaders.
+- **Do** edit `.fx` sources and related C# (`*Effect.cs`, uniform binding in render code) when shader behavior changes.
+- After `.fx` edits, tell the developer that **they** need to recompile `.fxc` manually and rebuild with `--no-incremental` before runtime will reflect shader changes.
+- Do not treat a failed or skipped `fxc` step as a blocker for completing C#/shader-source work.
+
 ## Development Workflow
 
 ### Common File Locations
