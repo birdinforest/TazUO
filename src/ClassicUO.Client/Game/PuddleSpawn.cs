@@ -28,6 +28,8 @@ namespace ClassicUO.Game
             region.WaveScale = options.WaveScale;
             region.PivotStableBand = options.PivotStableBand;
             region.PivotHorizontalRipple = options.PivotHorizontalRipple;
+            region.SurfaceShimmerStrength = options.SurfaceShimmerStrength;
+            region.EdgeRippleStrength = options.EdgeRippleStrength;
 
             PuddleSpawnOptions.ApplyDefaultHeightMask(options, world);
             if (options.UseHeightMask)

@@ -24,6 +24,26 @@ namespace ClassicUO.Renderer.Effects
             WaveSpeed = Parameters["WaveSpeed"];
             WaveScale = Parameters["WaveScale"];
 
+            if (TryGetParameter(this, "PivotStableBand", out EffectParameter? pivotStableBand))
+            {
+                PivotStableBand = pivotStableBand;
+            }
+
+            if (TryGetParameter(this, "PivotHorizontalRipple", out EffectParameter? pivotHorizontalRipple))
+            {
+                PivotHorizontalRipple = pivotHorizontalRipple;
+            }
+
+            if (TryGetParameter(this, "SurfaceShimmerStrength", out EffectParameter? surfaceShimmerStrength))
+            {
+                SurfaceShimmerStrength = surfaceShimmerStrength;
+            }
+
+            if (TryGetParameter(this, "EdgeRippleStrength", out EffectParameter? edgeRippleStrength))
+            {
+                EdgeRippleStrength = edgeRippleStrength;
+            }
+
             SupportsHeightMask = TryGetParameter(this, "UseHeightMask", out EffectParameter? useHeightMask);
             if (SupportsHeightMask)
             {
@@ -54,15 +74,6 @@ namespace ClassicUO.Renderer.Effects
             if (SupportsContactMap)
             {
                 UseContactMap = useContactMap!;
-                if (TryGetParameter(this, "PivotStableBand", out EffectParameter? pivotStableBand))
-                {
-                    PivotStableBand = pivotStableBand;
-                }
-
-                if (TryGetParameter(this, "PivotHorizontalRipple", out EffectParameter? pivotHorizontalRipple))
-                {
-                    PivotHorizontalRipple = pivotHorizontalRipple;
-                }
             }
 
             CurrentTechnique = Techniques["PuddleTechnique"];
@@ -147,5 +158,7 @@ namespace ClassicUO.Renderer.Effects
         public EffectParameter? UseContactMap { get; }
         public EffectParameter? PivotStableBand { get; }
         public EffectParameter? PivotHorizontalRipple { get; }
+        public EffectParameter? SurfaceShimmerStrength { get; }
+        public EffectParameter? EdgeRippleStrength { get; }
     }
 }

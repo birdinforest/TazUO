@@ -16,8 +16,10 @@ namespace ClassicUO.Game
         public float WaveStrength { get; set; } = 0.018f;
         public float WaveSpeed { get; set; } = 1.0f;
         public float WaveScale { get; set; } = 18.0f;
-        public float PivotStableBand { get; set; } = 0.015f;
+        public float PivotStableBand { get; set; } = 0.012f;
         public float PivotHorizontalRipple { get; set; } = 0.25f;
+        public float SurfaceShimmerStrength { get; set; } = 0.05f;
+        public float EdgeRippleStrength { get; set; } = 0.04f;
         public bool UseHeightMask { get; set; }
         public sbyte MaxWaterZ { get; set; }
 

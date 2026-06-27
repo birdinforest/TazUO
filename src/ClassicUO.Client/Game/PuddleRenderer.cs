@@ -193,6 +193,8 @@ namespace ClassicUO.Game
                 _effect.WaveScale.SetValue(r.WaveScale);
                 _effect.PivotStableBand?.SetValue(r.PivotStableBand);
                 _effect.PivotHorizontalRipple?.SetValue(r.PivotHorizontalRipple);
+                _effect.SurfaceShimmerStrength?.SetValue(r.SurfaceShimmerStrength);
+                _effect.EdgeRippleStrength?.SetValue(r.EdgeRippleStrength);
                 _effect.UseContactMap?.SetValue(
                     _effect.SupportsContactMap && ContactRT != null ? 1f : 0f
                 );

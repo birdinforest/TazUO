@@ -1,5 +1,7 @@
 // Puddle.fx — Ground puddle effect for TazUO
-// Compile: fxc.exe /T fx_2_0 /O3 /Fo Puddle.fxc Puddle.fx
+// Plan C: reflection UV distortion (pivot-stabilized) is separate from surface decoration
+// (shimmer + edge ripple on final color / tint — does not move ReflectionSampler UVs).
+// Compile: fxc.exe /T fx_2_0 /O3 /Fo Puddle.fxc Puddle.fx  (developers compile manually; see TazUO/CLAUDE.md)
 
 float4x4 MatrixTransform;
 float     Time;
@@ -13,6 +15,8 @@ float     WaveSpeed;
 float     WaveScale;
 float     PivotStableBand;
 float     PivotHorizontalRipple;
+float     SurfaceShimmerStrength;
+float     EdgeRippleStrength;
 float     UseContactMap;
 
 float UseHeightMask; // 1 = sample combined puddle mask (shape + optional height)
@@ -163,6 +167,8 @@ float4 PuddlePS(PS_INPUT IN) : COLOR0
         discard;
 
     float timeScale = max(WaveSpeed, 0.001f);
+
+    // --- Reflection UV distortion (pivot-stabilized; does not include surface shimmer) ---
     float wn1 = valueNoise(uv * WaveScale + float2(Time * timeScale * 0.65f, Time * timeScale * 0.30f));
     float wn2 = valueNoise(uv * (WaveScale * 0.8f) + float2(-Time * timeScale * 0.45f, Time * timeScale * 0.55f));
     float2 distortRaw = (float2(wn1, wn2) - 0.5f) * WaveStrength;
@@ -177,10 +183,23 @@ float4 PuddlePS(PS_INPUT IN) : COLOR0
     float4 reflection = tex2D(ReflectionSampler, reflUV);
 
     float4 waterTint = float4(0.28f, 0.38f, 0.55f, 1.0f);
-    float4 waterColor = lerp(waterTint, reflection * waterTint, reflection.a * ReflectStrength);
+
+    // --- Surface decoration (independent noise; does not affect reflection sampling) ---
+    float shimmerNoise = valueNoise(uv * WaveScale * 2.0f + float2(Time * timeScale, Time * timeScale * 0.7f));
+    float shimmer = (shimmerNoise - 0.5f) * 2.0f * SurfaceShimmerStrength;
+
+    // Rim band peaks where outerMask transitions (puddle edge)
+    float edgeBand = 4.0f * outerMask * (1.0f - outerMask);
+    float edgeNoise = valueNoise(uv * (WaveScale * 2.5f) + float2(-Time * timeScale * 0.8f, Time * timeScale * 0.4f));
+    float edgeRipple = (edgeNoise - 0.5f) * 2.0f * EdgeRippleStrength * edgeBand;
+
+    float tintMod = 1.0f + shimmer * outerMask * 0.6f;
+    float4 modulatedTint = waterTint * tintMod;
+
+    float4 waterColor = lerp(modulatedTint, reflection * modulatedTint, reflection.a * ReflectStrength);
 
     float4 finalColor;
-    finalColor.rgb = waterColor.rgb;
+    finalColor.rgb = waterColor.rgb + shimmer * outerMask + edgeRipple;
     finalColor.a = outerMask * 0.80f * Alpha;
 
     return finalColor;
