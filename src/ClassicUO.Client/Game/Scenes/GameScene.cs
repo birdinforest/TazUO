@@ -924,6 +924,7 @@ namespace ClassicUO.Game.Scenes
 
             Profiler.EnterContext("WorldUpdate");
             _world.Update();
+            _world.Weather.UpdateAudio();
             _animatedStaticsManager.Process();
             _world.BoatMovingManager.Update();
             _world.Player.Pathfinder.ProcessAutoWalk();
