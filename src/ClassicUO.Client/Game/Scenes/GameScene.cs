@@ -1463,6 +1463,40 @@ namespace ClassicUO.Game.Scenes
                 _world.Weather.Draw(batcher, 0, 0, MAX_LAYER_DEPTH - 1);
                 Profiler.ExitContext("Weather");
             }
+
+            if (drawWeather && PuddleManager.GetRegions().Count > 0)
+            {
+                DrawFootstepRippleEffects(batcher, MAX_LAYER_DEPTH - 1);
+            }
+        }
+
+        private void DrawFootstepRippleEffects(UltimaBatcher2D batcher, float layerDepth)
+        {
+            if (!_world.InGame || _world.Player == null)
+            {
+                return;
+            }
+
+            Point winsize = new Point(Camera.Bounds.Width, Camera.Bounds.Height);
+            int tileOffX = _world.Player.X;
+            int tileOffY = _world.Player.Y;
+            int winGameCenterX = (winsize.X >> 1) + (_world.Player.Z << 2);
+            int winGameCenterY = (winsize.Y >> 1) + (_world.Player.Z << 2);
+            winGameCenterX -= (int)_world.Player.Offset.X;
+            winGameCenterY -= (int)(_world.Player.Offset.Y - _world.Player.Offset.Z);
+
+            int viewportOffsetX = (tileOffX - tileOffY) * 22 - winGameCenterX;
+            int viewportOffsetY = (tileOffX + tileOffY) * 22 - winGameCenterY;
+
+            Profiler.EnterContext("FootstepRipples");
+            _world.FootstepRippleEffect.Update(
+                viewportOffsetX,
+                viewportOffsetY,
+                winsize.X,
+                winsize.Y
+            );
+            _world.FootstepRippleEffect.Draw(batcher, layerDepth);
+            Profiler.ExitContext("FootstepRipples");
         }
 
         private int DrawRenderList(UltimaBatcher2D batcher, List<GameObject> renderList)

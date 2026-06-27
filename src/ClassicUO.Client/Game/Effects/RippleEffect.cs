@@ -10,22 +10,26 @@ namespace ClassicUO.Game.Effects
     internal sealed class RippleEffect
     {
         // Configuration constants
-        private const int MAX_RIPPLES = 64;
+        public const int DefaultMaxRipples = 64;
+        public const int FootstepMaxRipples = 32;
+        public const float DefaultMaxRadius = 20f;
+        public const float FootstepMaxRadius = DefaultMaxRadius * 2f;
         private const float RIPPLE_DURATION = 0.8f;
         private const int CIRCLE_SEGMENTS = 32;
-        private const float RIPPLE_MAX_RADIUS = 20f;
         private const float RIPPLE_ALPHA_MULTIPLIER = 0.7f;
         private const float RIPPLE_RING_SPACING = 0.3f;
         private const float ISOMETRIC_VERTICAL_SCALE = 0.5f;
 
-        private readonly Ripple[] _ripples = new Ripple[MAX_RIPPLES];
+        private readonly Ripple[] _ripples;
         private readonly World _world;
+        private readonly float _maxRadius;
         private uint _lastTick;
 
-        public RippleEffect(World world)
+        public RippleEffect(World world, int maxRipples = DefaultMaxRipples, float maxRadius = DefaultMaxRadius)
         {
             _world = world;
-            _lastTick = Time.Ticks;
+            _ripples = new Ripple[maxRipples];
+            _maxRadius = maxRadius;
         }
 
         public void CreateRipple(float worldX, float worldY)
@@ -45,7 +49,7 @@ namespace ClassicUO.Game.Effects
                     ripple.WorldX = worldX;
                     ripple.WorldY = worldY;
                     ripple.LifeTime = 0.0f;
-                    ripple.MaxRadius = RIPPLE_MAX_RADIUS;
+                    ripple.MaxRadius = _maxRadius;
                     ripple.SeedID = (uint)(Time.Ticks + i);
 
                     break;
@@ -54,14 +58,44 @@ namespace ClassicUO.Game.Effects
         }
 
         /// <summary>
-        /// Updates all active ripple particles.
+        /// Updates all active ripple particles using the same frame delta as weather ripples.
         /// </summary>
-        /// <param name="deltaTime">Time since last update in seconds</param>
-        /// <param name="viewportOffsetX">Viewport offset X</param>
-        /// <param name="viewportOffsetY">Viewport offset Y</param>
-        /// <param name="visibleRangeX">Visible range X for culling</param>
-        /// <param name="visibleRangeY">Visible range Y for culling</param>
+        public void Update(int viewportOffsetX, int viewportOffsetY, int visibleRangeX, int visibleRangeY)
+        {
+            ApplyUpdate(GetFrameDeltaTime(), viewportOffsetX, viewportOffsetY, visibleRangeX, visibleRangeY);
+        }
+
+        /// <summary>
+        /// Updates with an explicit delta (unit tests).
+        /// </summary>
         public void Update(float deltaTime, int viewportOffsetX, int viewportOffsetY,
+                          int visibleRangeX, int visibleRangeY)
+        {
+            ApplyUpdate(deltaTime, viewportOffsetX, viewportOffsetY, visibleRangeX, visibleRangeY);
+        }
+
+        private float GetFrameDeltaTime()
+        {
+            uint passed = Time.Ticks - _lastTick;
+
+            if (_lastTick == 0)
+            {
+                _lastTick = Time.Ticks;
+                return 0f;
+            }
+
+            if (passed > 7000)
+            {
+                _lastTick = Time.Ticks;
+                passed = 25;
+            }
+
+            float deltaTime = passed / 1000f;
+            _lastTick = Time.Ticks;
+            return deltaTime;
+        }
+
+        private void ApplyUpdate(float deltaTime, int viewportOffsetX, int viewportOffsetY,
                           int visibleRangeX, int visibleRangeY)
         {
             // Update and cull each active ripple
@@ -147,6 +181,8 @@ namespace ClassicUO.Game.Effects
             {
                 _ripples[i].Active = false;
             }
+
+            _lastTick = 0;
         }
 
         /// <summary>

@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: BSD-2-Clause
+﻿// SPDX-License-Identifier: BSD-2-Clause
 
 using System;
 using System.Collections.Generic;
@@ -51,7 +51,8 @@ namespace ClassicUO.Game
             Macros = new MacroManager(this);
             CommandManager = new CommandManager(this);
             Weather = new Weather(this);
-            RippleEffect = new RippleEffect(this);
+            RainRippleEffect = new RippleEffect(this);
+            FootstepRippleEffect = new RippleEffect(this, RippleEffect.FootstepMaxRipples, RippleEffect.FootstepMaxRadius);
             SplashEffect = new SplashEffect();
             InfoBars = new InfoBarManager(this);
             DurabilityManager = new DurabilityManager(this);
@@ -114,7 +115,9 @@ namespace ClassicUO.Game
 
         internal Weather Weather { get; }
 
-        internal RippleEffect RippleEffect { get; }
+        internal RippleEffect RainRippleEffect { get; }
+
+        internal RippleEffect FootstepRippleEffect { get; }
 
         internal SplashEffect SplashEffect { get; }
 

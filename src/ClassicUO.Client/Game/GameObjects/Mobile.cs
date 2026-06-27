@@ -3,6 +3,7 @@
 using System;
 using System.Runtime.CompilerServices;
 using ClassicUO.Configuration;
+using ClassicUO.Game;
 using ClassicUO.Game.Data;
 using ClassicUO.Game.Managers;
 using ClassicUO.Game.UI.Gumps;
@@ -957,6 +958,11 @@ namespace ClassicUO.Game.GameObjects
                         }
 
                         LastStepTime = Time.Ticks;
+
+                        if (!IsDead && !IsFlying)
+                        {
+                            PuddleManager.TryCreateFootstepRipple(X, Y, Z, World);
+                        }
                     }
 
                     UpdateTextCoordsV();

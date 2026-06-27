@@ -244,7 +244,7 @@ namespace ClassicUO.Game
             _windTimer = _timer = 0;
             CurrentWeather = null;
             StopRainSound();
-            _world.RippleEffect.Reset();
+            _world.RainRippleEffect.Reset();
             _world.SplashEffect.Reset();
         }
 
@@ -1118,7 +1118,7 @@ namespace ClassicUO.Game
                                         {
                                             if (ShouldCreateRippleAtPosition(effect.WorldX, effect.WorldY))
                                             {
-                                                _world.RippleEffect.CreateRipple(effect.WorldX, effect.WorldY);
+                                                _world.RainRippleEffect.CreateRipple(effect.WorldX, effect.WorldY);
                                                 effect.RippleCreated = true;
                                             }
                                         }
@@ -1691,10 +1691,10 @@ namespace ClassicUO.Game
                 _world.SplashEffect.Draw(batcher, layerDepth);
                 Profiler.ExitContext("Splashes");
 
-                Profiler.EnterContext("Ripples");
-                _world.RippleEffect.Update(deltaTime, viewportOffsetX, viewportOffsetY, visibleRangeX, visibleRangeY);
-                _world.RippleEffect.Draw(batcher, layerDepth);
-                Profiler.ExitContext("Ripples");
+                Profiler.EnterContext("RainRipples");
+                _world.RainRippleEffect.Update(viewportOffsetX, viewportOffsetY, visibleRangeX, visibleRangeY);
+                _world.RainRippleEffect.Draw(batcher, layerDepth);
+                Profiler.ExitContext("RainRipples");
             }
 
             _lastTick = Time.Ticks;

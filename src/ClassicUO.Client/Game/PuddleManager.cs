@@ -67,5 +67,61 @@ namespace ClassicUO.Game
 
             return false;
         }
+
+        /// <summary>
+        /// True when any puddle covers the given tile (shape mask + optional height clip).
+        /// </summary>
+        public static bool ContainsTile(int tileX, int tileY, sbyte tileZ, World world)
+        {
+            if (world == null || _regions.Count == 0)
+            {
+                return false;
+            }
+
+            float sampleTileX = tileX + 0.5f;
+            float sampleTileY = tileY + 0.5f;
+
+            for (int i = 0; i < _regions.Count; i++)
+            {
+                PuddleRegion region = _regions[i];
+
+                if (PuddleRenderer.SampleOuterShapeAlpha(region, sampleTileX, sampleTileY) <= 0.02f)
+                {
+                    continue;
+                }
+
+                if (region.UseHeightMask && world.Map != null)
+                {
+                    if (world.Map.GetTileZ(tileX, tileY) >= region.MaxWaterZ)
+                    {
+                        continue;
+                    }
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Spawns a footstep ripple when a mobile lands on a visible puddle tile.
+        /// </summary>
+        public static void TryCreateFootstepRipple(int tileX, int tileY, sbyte tileZ, World world)
+        {
+            if (world == null || !world.InGame)
+            {
+                return;
+            }
+
+            if (_regions.Count == 0 || !ContainsTile(tileX, tileY, tileZ, world))
+            {
+                return;
+            }
+
+            float worldX = (tileX - tileY) * 22f;
+            float worldY = (tileX + tileY) * 22f - (tileZ << 2);
+            world.FootstepRippleEffect.CreateRipple(worldX, worldY);
+        }
     }
 }
