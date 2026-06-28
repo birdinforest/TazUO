@@ -84,33 +84,17 @@ float2 GetPuddleMaskPixelCoord(float2 uv)
     return tileCoord * subScale + 0.5f;
 }
 
-float SamplePuddleMaskRawPixel(float2 pixelCoord, float2 texSize)
-{
-    if (pixelCoord.x < 0.0 || pixelCoord.y < 0.0 || pixelCoord.x >= texSize.x || pixelCoord.y >= texSize.y)
-        return 0.0;
-
-    return tex2D(HeightMaskSampler, pixelCoord / texSize).r;
-}
-
-// Combined CPU mask: organic outer rim + optional height shoreline (9-tap soften).
 float SamplePuddleMask(float2 uv)
 {
     float subScale = max(MaskSubScale, 1.0f);
     float2 texSize = float2(MaskTileCols * subScale, MaskTileRows * subScale);
     float2 pixelCoord = GetPuddleMaskPixelCoord(uv);
-    float2 texel = float2(1.0, 1.0);
+    float2 maskUV = (pixelCoord + 0.5) / texSize;
 
-    float m0 = SamplePuddleMaskRawPixel(pixelCoord, texSize);
-    float m1 = SamplePuddleMaskRawPixel(pixelCoord + float2(texel.x, 0.0), texSize);
-    float m2 = SamplePuddleMaskRawPixel(pixelCoord - float2(texel.x, 0.0), texSize);
-    float m3 = SamplePuddleMaskRawPixel(pixelCoord + float2(0.0, texel.y), texSize);
-    float m4 = SamplePuddleMaskRawPixel(pixelCoord - float2(0.0, texel.y), texSize);
-    float m5 = SamplePuddleMaskRawPixel(pixelCoord + texel, texSize);
-    float m6 = SamplePuddleMaskRawPixel(pixelCoord + float2(-texel.x, texel.y), texSize);
-    float m7 = SamplePuddleMaskRawPixel(pixelCoord + float2(texel.x, -texel.y), texSize);
-    float m8 = SamplePuddleMaskRawPixel(pixelCoord - texel, texSize);
+    if (maskUV.x < 0.0 || maskUV.y < 0.0 || maskUV.x > 1.0 || maskUV.y > 1.0)
+        return 0.0;
 
-    return (m0 * 2.0 + m1 + m2 + m3 + m4 + m5 + m6 + m7 + m8) / 10.0;
+    return tex2D(HeightMaskSampler, maskUV).r;
 }
 
 // Legacy fallback when no mask texture is bound (old embedded .fxc).
