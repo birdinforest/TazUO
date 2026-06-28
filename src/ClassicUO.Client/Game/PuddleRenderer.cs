@@ -18,6 +18,15 @@ namespace ClassicUO.Game
         private const float ISO_TILE_WIDTH = 22f;
         /// <summary>Height-mask texels per map tile — higher = smoother organic shorelines.</summary>
         private const int MASK_SUBPIXELS_PER_TILE = 8;
+        /// <summary>Extra subpixel density for small puddles to avoid faceted edges.</summary>
+        private const int MASK_SUBPIXELS_SMALL = 16;
+        /// <summary>Tile-radius threshold where extra small-puddle tuning peaks.</summary>
+        private const float SMALL_SHAPE_TILE_RADIUS = 2.2f;
+        /// <summary>Always blend toward screen-round metric to suppress iso diamond N/S points.</summary>
+        private const float MIN_SHAPE_ROUND_BLEND = 0.55f;
+        private const float MAX_SHAPE_ROUND_BLEND = 0.92f;
+        /// <summary>Extra mask resolution up to this tile radius (covers ~radius 44px).</summary>
+        private const float HIGH_MASK_DETAIL_TILE_RADIUS = 4.5f;
         /// <summary>Draw quad padding so outward organic lobes are not clipped.</summary>
         private const float OUTER_SHAPE_QUAD_PAD = 1.28f;
         /// <summary>Screen AABB half-extent multiplier for iso tile metric (|dTX±dTY| max = R·√5).</summary>
@@ -298,6 +307,7 @@ namespace ClassicUO.Game
         internal static void RebuildPuddleMask(GraphicsDevice gd, PuddleRegion region, World world)
         {
             float shapeTileRadius = ComputeShapeTileRadius(region.Radius);
+            float roundBlend = ComputeShapeRoundBlend(shapeTileRadius);
             ComputeMaskTileMargins(shapeTileRadius, out int marginX, out int marginY);
             int minTX = region.TileX - marginX;
             int minTY = region.TileY - marginY;
@@ -320,9 +330,9 @@ namespace ClassicUO.Game
 
                     float dTileX = tx - region.TileX;
                     float dTileY = ty - region.TileY;
-                    float isoDist = MathF.Sqrt(dTileX * dTileX + (dTileY * 0.5f) * (dTileY * 0.5f));
+                    float metricDist = ComputeBlendedTileDistance(dTileX, dTileY, roundBlend);
 
-                    if (isoDist > shapeTileRadius + 0.5f)
+                    if (metricDist > shapeTileRadius + 0.5f)
                     {
                         tileWet[index] = 0f;
                         continue;
@@ -351,20 +361,24 @@ namespace ClassicUO.Game
                 region.MinWaterZ = minZ == sbyte.MaxValue ? (sbyte)0 : minZ;
             }
 
-            region.MaskSubScale = MASK_SUBPIXELS_PER_TILE;
+            int subScale = shapeTileRadius < HIGH_MASK_DETAIL_TILE_RADIUS
+                ? MASK_SUBPIXELS_SMALL
+                : MASK_SUBPIXELS_PER_TILE;
+            region.MaskSubScale = subScale;
 
-            int outW = cols * MASK_SUBPIXELS_PER_TILE;
-            int outH = rows * MASK_SUBPIXELS_PER_TILE;
+            int outW = cols * subScale;
+            int outH = rows * subScale;
             var combined = new float[outW * outH];
             var shape = new float[outW * outH];
             BuildOuterShapeMask(
                 region,
                 minTX,
                 minTY,
-                ComputeShapeTileRadius(region.Radius),
+                shapeTileRadius,
                 shape,
                 outW,
-                outH
+                outH,
+                subScale
             );
 
             if (!hasHeightClip)
@@ -374,7 +388,7 @@ namespace ClassicUO.Game
             else
             {
                 var heightAlpha = new float[outW * outH];
-                BuildHeightAlphaMask(tileWet, cols, rows, heightAlpha, outW, outH);
+                BuildHeightAlphaMask(tileWet, cols, rows, heightAlpha, outW, outH, subScale);
                 BlurHeightMask3x3(heightAlpha, outW, outH);
 
                 for (int i = 0; i < combined.Length; i++)
@@ -407,37 +421,30 @@ namespace ClassicUO.Game
         /// </summary>
         internal static float SampleOuterShapeAlpha(PuddleRegion region, float worldTileX, float worldTileY)
         {
-            float dTileX = worldTileX - region.TileX;
-            float dTileY = worldTileY - region.TileY;
-            float isoDist = MathF.Sqrt(dTileX * dTileX + (dTileY * 0.5f) * (dTileY * 0.5f));
-            float tileRadius = region.Radius / ISO_TILE_WIDTH * ComputeShapeEdgeScale();
+            float tileRadius = ComputeShapeTileRadius(region.Radius);
 
             if (tileRadius <= 0.0001f)
             {
                 return 0f;
             }
 
-            float dist = isoDist / tileRadius;
-            float angle = MathF.Atan2(dTileY, dTileX);
-            float wobble = ComputeOuterShapeWobble(angle, region.TileX, region.TileY, worldTileX, worldTileY);
-            float edgeProximity = SmoothStep(0.72f, 1.08f, dist);
-
-            float shapeTileRadius = ComputeShapeTileRadius(region.Radius);
-            ComputeMaskTileMargins(shapeTileRadius, out int marginX, out int marginY);
+            float dTileX = worldTileX - region.TileX;
+            float dTileY = worldTileY - region.TileY;
+            ComputeMaskTileMargins(tileRadius, out int marginX, out int marginY);
             int minTX = region.TileX - marginX;
             int minTY = region.TileY - marginY;
-            int px = (int)((worldTileX - minTX) * MASK_SUBPIXELS_PER_TILE);
-            int py = (int)((worldTileY - minTY) * MASK_SUBPIXELS_PER_TILE);
-            float micro =
-                (MaskHash(px * 5 + region.TileX, py * 5 + region.TileY) - 0.5f)
-                * OUTER_SHAPE_MICRO
-                * edgeProximity;
-            float boundary = 1.0f + wobble + micro;
+            int px = (int)((worldTileX - minTX) * region.MaskSubScale);
+            int py = (int)((worldTileY - minTY) * region.MaskSubScale);
 
-            return 1.0f - SmoothStep(
-                boundary - OUTER_SHAPE_FADE_IN,
-                boundary + OUTER_SHAPE_FADE_OUT,
-                dist
+            return EvaluateOuterShapeAlpha(
+                region,
+                dTileX,
+                dTileY,
+                worldTileX,
+                worldTileY,
+                tileRadius,
+                px,
+                py
             );
         }
 
@@ -486,6 +493,97 @@ namespace ClassicUO.Game
             marginY = Math.Max(2, (int)Math.Ceiling(shapeTileRadius * 2f) + 2);
         }
 
+        private static float ComputeShapeRoundBlend(float tileRadius)
+        {
+            float smallBoost = SmoothStep(SMALL_SHAPE_TILE_RADIUS, 0.65f, tileRadius);
+            return MIN_SHAPE_ROUND_BLEND + smallBoost * (MAX_SHAPE_ROUND_BLEND - MIN_SHAPE_ROUND_BLEND);
+        }
+
+        private static void ComputeShapeEdgeTuning(
+            float tileRadius,
+            out float roundBlend,
+            out float fadeIn,
+            out float fadeOut,
+            out float wobbleScale
+        )
+        {
+            float smallBoost = SmoothStep(SMALL_SHAPE_TILE_RADIUS, 0.65f, tileRadius);
+            roundBlend = ComputeShapeRoundBlend(tileRadius);
+            fadeIn = OUTER_SHAPE_FADE_IN + 0.08f + smallBoost * 0.16f;
+            fadeOut = OUTER_SHAPE_FADE_OUT + 0.06f + smallBoost * 0.14f;
+            wobbleScale = 1.18f + smallBoost * 0.85f;
+        }
+
+        /// <summary>
+        /// Blends iso-tile metric with screen-round metric to avoid N/S diamond points at any radius.
+        /// </summary>
+        private static float ComputeBlendedTileDistance(float dTileX, float dTileY, float roundBlend)
+        {
+            float isoDist = MathF.Sqrt(dTileX * dTileX + (dTileY * 0.5f) * (dTileY * 0.5f));
+            if (roundBlend <= 0.001f)
+            {
+                return isoDist;
+            }
+
+            float roundDist = MathF.Sqrt(dTileX * dTileX + dTileY * dTileY);
+            return isoDist * (1f - roundBlend) + roundDist * roundBlend;
+        }
+
+        private static float EvaluateOuterShapeAlpha(
+            PuddleRegion region,
+            float dTileX,
+            float dTileY,
+            float worldTileX,
+            float worldTileY,
+            float tileRadius,
+            int maskPx,
+            int maskPy
+        )
+        {
+            ComputeShapeEdgeTuning(tileRadius, out float roundBlend, out float fadeIn, out float fadeOut, out float wobbleScale);
+
+            float metricDist = ComputeBlendedTileDistance(dTileX, dTileY, roundBlend);
+            float dist = metricDist / tileRadius;
+
+            float angle = MathF.Atan2(dTileY, dTileX);
+            float wobble = ComputeOrganicBoundaryWobble(region, angle, worldTileX, worldTileY, wobbleScale);
+            float edgeProximity = SmoothStep(0.72f, 1.08f, dist);
+            float micro =
+                (MaskHash(maskPx * 5 + region.TileX, maskPy * 5 + region.TileY) - 0.5f)
+                * OUTER_SHAPE_MICRO
+                * edgeProximity
+                * wobbleScale;
+            float boundary = 1.0f + wobble + micro;
+
+            return 1.0f - SmoothStep(boundary - fadeIn, boundary + fadeOut, dist);
+        }
+
+        private static float ComputeOrganicBoundaryWobble(
+            PuddleRegion region,
+            float angle,
+            float worldTileX,
+            float worldTileY,
+            float wobbleScale
+        )
+        {
+            float baseWobble = ComputeOuterShapeWobble(
+                angle,
+                region.TileX,
+                region.TileY,
+                worldTileX,
+                worldTileY
+            ) * wobbleScale;
+
+            float seed = region.TileX * 0.413f + region.TileY * 0.271f + region.Id * 0.019f;
+            float harmonic =
+                MathF.Sin((angle * 2f) + seed) * 0.095f
+                + MathF.Sin((angle * 3f) + (seed * 1.618f) + 0.7f) * 0.065f
+                + MathF.Sin((angle * 5f) + (seed * 2.718f) + 1.3f) * 0.042f
+                + MathF.Sin((angle * 7f) + (seed * 0.577f) + 2.1f) * 0.028f;
+
+            return baseWobble + harmonic * wobbleScale;
+        }
+
         private static void BuildOuterShapeMask(
             PuddleRegion region,
             int minTX,
@@ -493,36 +591,28 @@ namespace ClassicUO.Game
             float tileRadius,
             float[] output,
             int outW,
-            int outH
+            int outH,
+            int subScale
         )
         {
-            const int sub = MASK_SUBPIXELS_PER_TILE;
-
             for (int py = 0; py < outH; py++)
             {
                 for (int px = 0; px < outW; px++)
                 {
-                    float worldTileX = minTX + (px + 0.5f) / sub;
-                    float worldTileY = minTY + (py + 0.5f) / sub;
+                    float worldTileX = minTX + (px + 0.5f) / subScale;
+                    float worldTileY = minTY + (py + 0.5f) / subScale;
                     float dTileX = worldTileX - region.TileX;
                     float dTileY = worldTileY - region.TileY;
-                    float isoDist = MathF.Sqrt(dTileX * dTileX + (dTileY * 0.5f) * (dTileY * 0.5f));
-                    float dist = isoDist / tileRadius;
 
-                    float angle = MathF.Atan2(dTileY, dTileX);
-                    float wobble = ComputeOuterShapeWobble(angle, region.TileX, region.TileY, worldTileX, worldTileY);
-
-                    float edgeProximity = SmoothStep(0.72f, 1.08f, dist);
-                    float micro =
-                        (MaskHash(px * 5 + region.TileX, py * 5 + region.TileY) - 0.5f)
-                        * OUTER_SHAPE_MICRO
-                        * edgeProximity;
-                    float boundary = 1.0f + wobble + micro;
-
-                    output[py * outW + px] = 1.0f - SmoothStep(
-                        boundary - OUTER_SHAPE_FADE_IN,
-                        boundary + OUTER_SHAPE_FADE_OUT,
-                        dist
+                    output[py * outW + px] = EvaluateOuterShapeAlpha(
+                        region,
+                        dTileX,
+                        dTileY,
+                        worldTileX,
+                        worldTileY,
+                        tileRadius,
+                        px,
+                        py
                     );
                 }
             }
@@ -534,17 +624,16 @@ namespace ClassicUO.Game
             int rows,
             float[] output,
             int outW,
-            int outH
+            int outH,
+            int subScale
         )
         {
-            const int sub = MASK_SUBPIXELS_PER_TILE;
-
             for (int py = 0; py < outH; py++)
             {
                 for (int px = 0; px < outW; px++)
                 {
-                    float tileX = (px + 0.5f) / sub;
-                    float tileY = (py + 0.5f) / sub;
+                    float tileX = (px + 0.5f) / subScale;
+                    float tileY = (py + 0.5f) / subScale;
                     float wet = SampleTileWetBilinear(tileWet, cols, rows, tileX, tileY);
 
                     float n1 = MaskHash(px, py);
